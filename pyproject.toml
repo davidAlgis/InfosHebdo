@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "infoshebdo"
+version = "0.1.0"
+description = "Veille hebdomadaire box-office et ventes de jeux video"
+requires-python = ">=3.10"
+dependencies = [
+    "requests>=2.31",
+    "beautifulsoup4>=4.12",
+    "lxml>=5.0",
+    "Jinja2>=3.1",
+    "PyYAML>=6.0",
+    "python-dotenv>=1.0",
+    "Pillow>=10.0",
+    "pystray>=0.19",
+]
+
+[project.scripts]
+infoshebdo = "infoshebdo.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["infoshebdo*"]
+
+[tool.setuptools.package-data]
+infoshebdo = ["templates/*.j2"]

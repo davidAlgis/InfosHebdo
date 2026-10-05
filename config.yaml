@@ -1,0 +1,85 @@
+# -------------------------------------------------------------------------
+# InfosHebdo - configuration de la veille
+#
+# Ce fichier est editable a la main et reecrit par l'interface
+# graphique (infoshebdo ui). Les commentaires sont regeneres a chaque
+# enregistrement : ne pas y ajouter de notes personnelles.
+#
+# Variables facultatives (INFOSHEBDO_DB, INFOSHEBDO_HTTP_DELAY) : .env.
+# -------------------------------------------------------------------------
+
+# Nombre de lignes conservees par classement dans le rapport.
+top_n: 10
+
+# Profondeur de rattrapage : a chaque collecte on re-interroge les N
+# dernieres semaines. Indispensable car le box-office international
+# (France, Japon) est publie avec plusieurs semaines de retard et
+# revise apres coup.
+backfill_weeks: 8
+
+# Fuseau utilise pour decider "quelle est la semaine ecoulee".
+timezone: Europe/Paris
+
+box_office:
+  enabled: true
+  # Marches suivis. 'WW' est un agregat calcule, pas une source.
+  markets: [FR, US, JP, WW]
+  sources:
+    # entrees France (donnee professionnelle relayee par Allocine)
+    allocine_france: true
+    # recettes USD, zones US / FR / JP
+    boxofficemojo: true
+  # Zones Box Office Mojo -> marche interne. La chaine vide est la
+  # zone par defaut du site (Amerique du Nord).
+  mojo_areas:
+    US: ""
+    FR: FR
+    JP: JP
+
+games:
+  enabled: true
+  # Marches Steam. 'WW' = classement mondial officiel Steam.
+  steam_markets: [WW, FR, US, JP, GB, DE]
+  sources:
+    # classement hebdo officiel Steam, par pays
+    steam_topsellers: true
+    # joueurs simultanes (officiel, mondial)
+    steam_concurrents: true
+    # proprietaires estimes (estimation tierce)
+    steamspy: true
+  # Ventes toutes plateformes : aucune source libre ne publie d'unites
+  # hebdomadaires. On surveille donc les publications de classements.
+  all_platforms:
+    editorial_watch: true
+    manual_import: true
+    feeds:
+      - name: Gematsu
+        url: "https://www.gematsu.com/feed"
+        markets: [JP]
+        keywords: [famitsu, media create, sales chart, hardware sales, software sales]
+      - name: GamesIndustry.biz
+        url: "https://www.gamesindustry.biz/feed"
+        markets: [GB, FR, DE, EU, US]
+        keywords: [chart, gsd, top 10, best-sell, bestsell, circana, npd]
+
+report:
+  title: "Veille hebdo - Cinema & Jeu video"
+  # Sections vides : 'hide' pour les masquer, 'show' pour afficher
+  # l'absence de donnee (recommande : on voit tout de suite qu'une
+  # source est tombee).
+  empty_sections: show
+  # Ouvrir le rapport dans le navigateur, une seule fois par semaine : le
+  # premier jour ou la tache planifiee tourne (lundi si le poste est
+  # allume, sinon mardi, etc.).
+  auto_open: true
+
+interface:
+  # Icone dans la zone de notification, pres de l'horloge.
+  tray: true
+  # Se replier dans la zone de notification apres le premier
+  # traitement lance dans la session.
+  minimize_after_first_use: true
+  # La croix de fermeture replie au lieu de quitter. « Quitter » reste
+  # accessible par le menu de l'icone.
+  close_to_tray: true
+

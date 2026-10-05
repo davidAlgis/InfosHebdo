@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+.venv/
+.env
+data/*.sqlite3
+data/cache/
+reports/*.html
+reports/*.txt
+logs/
+build/
+dist/
+infoshebdo/assets/
+data/import/traites/
+data/*.sqlite3-shm
+data/*.sqlite3-wal
