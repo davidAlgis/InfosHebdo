@@ -1,10 +1,16 @@
-"""Fenetre d'erreur de la commande planifiee.
+"""Fenetre d'erreur.
 
-La tache planifiee tourne sans console : une collecte qui echoue ne se verrait
-sinon que dans logs/, le jour ou l'on se demande pourquoi le rapport est
-vieux. Cette fenetre met l'erreur sous les yeux, avec le message exact de
-chaque source, et propose les gestes utiles : ouvrir le rapport, le journal,
-l'interface pour relancer une collecte.
+Une application sans console ne peut pas afficher une erreur : une collecte qui
+echoue ne se verrait sinon que dans logs/, le jour ou l'on se demande pourquoi
+le rapport est vieux. Cette fenetre met l'erreur sous les yeux, avec le message
+exact de chaque source, et propose les gestes utiles : ouvrir le rapport, le
+journal, relancer la recherche.
+
+Deux usages :
+
+* dans l'application residente, comme fenetre secondaire (`parent=`), avec un
+  bouton « Relancer la recherche » ;
+* seule, depuis la commande `auto` (`show`), sans application autour.
 
 Tkinter est charge a la demande : ni la collecte ni la generation du rapport
 n'en ont besoin, et un systeme sans affichage doit pouvoir les executer.
@@ -15,10 +21,10 @@ import logging
 import tkinter as tk
 from pathlib import Path
 from tkinter import ttk
-from typing import Sequence
+from typing import Callable, Sequence
 
-from .. import assets, paths, startup
-from .panels import open_in_explorer
+from .. import assets, paths
+from .files import open_in_explorer
 
 log = logging.getLogger(__name__)
 
@@ -50,7 +56,12 @@ def format_details(problems: Sequence, explanation: str = "") -> str:
 
 
 class ErrorWindow:
-    """Fenetre autonome : elle cree son propre `Tk` et le detruit a la fermeture."""
+    """Fenetre d'erreur.
+
+    Sans `parent` ni `root`, elle cree son propre `Tk` (usage autonome). Avec
+    `parent`, c'est une fenetre secondaire de l'application, qui ne ferme pas
+    l'application en se fermant.
+    """
 
     def __init__(
         self,
@@ -58,13 +69,22 @@ class ErrorWindow:
         explanation: str = "",
         report_path: Path | None = None,
         log_path: Path | None = None,
-        root: tk.Tk | None = None,
+        root: tk.Tk | tk.Toplevel | None = None,
+        parent: tk.Misc | None = None,
+        on_retry: Callable[[], None] | None = None,
     ) -> None:
         self.problems = list(problems)
         self.explanation = explanation
         self.report_path = report_path
         self.log_path = log_path
-        self.root = root or tk.Tk()
+        self.on_retry = on_retry
+        self.embedded = parent is not None
+        if root is not None:
+            self.root = root
+        elif parent is not None:
+            self.root = tk.Toplevel(parent)
+        else:
+            self.root = tk.Tk()
         self._build()
 
     # ------------------------------------------------------------------ #
@@ -79,7 +99,10 @@ class ErrorWindow:
         try:
             icon = assets.icon_path()
             if icon is not None:
-                root.iconbitmap(default=str(icon))
+                if isinstance(root, tk.Toplevel):
+                    root.iconbitmap(str(icon))
+                else:
+                    root.iconbitmap(default=str(icon))
         except Exception as exc:  # noqa: BLE001 - une icone absente n'est pas grave
             log.debug("icone indisponible : %s", exc)
 
@@ -124,7 +147,7 @@ class ErrorWindow:
              bool(self.report_path and self.report_path.exists())),
             ("log", "Ouvrir le journal", self.open_log,
              bool(self.log_path and self.log_path.exists())),
-            ("ui", "Ouvrir InfosHebdo", self.open_interface, True),
+            ("retry", "Relancer la recherche", self.retry, self.on_retry is not None),
             ("copy", "Copier le detail", self.copy_details, True),
         ):
             button = ttk.Button(bar, text=label, command=command)
@@ -155,8 +178,12 @@ class ErrorWindow:
         if self.log_path:
             self._safely(open_in_explorer, self.log_path)
 
-    def open_interface(self) -> None:
-        self._safely(startup.launch_detached, ["ui"])
+    def retry(self) -> None:
+        """Ferme la fenetre puis relance : l'echec precedent n'a plus a rester affiche."""
+        callback = self.on_retry
+        self.root.destroy()
+        if callback is not None:
+            self._safely(callback)
 
     def copy_details(self) -> None:
         self.root.clipboard_clear()
@@ -173,18 +200,25 @@ class ErrorWindow:
             log.warning("action impossible depuis la fenetre d'erreur : %s", exc)
 
     # ------------------------------------------------------------------ #
-    def run(self) -> None:
-        """Affiche la fenetre au premier plan et attend sa fermeture."""
+    def present(self) -> None:
+        """Met la fenetre au premier plan, sans l'y laisser.
+
+        Une verification automatique se declenche souvent derriere la fenetre
+        active : une erreur qu'on ne voit pas n'en est pas une.
+        """
         root = self.root
         root.update_idletasks()
+        root.deiconify()
         root.lift()
-        # Au premier plan meme si une autre application a le focus, sans y
-        # rester : une tache planifiee demarre souvent derriere la fenetre
-        # active, et une erreur qu'on ne voit pas n'en est pas une.
         root.attributes("-topmost", True)
         root.after(400, lambda: root.attributes("-topmost", False))
         root.focus_force()
-        root.mainloop()
+
+    def run(self) -> None:
+        """Usage autonome : affiche la fenetre et attend sa fermeture."""
+        self.present()
+        if not self.embedded:
+            self.root.mainloop()
 
 
 def show(

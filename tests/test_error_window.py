@@ -1,7 +1,7 @@
 """Tests de la fenetre d'erreur et de son branchement dans `auto`.
 
-La tache planifiee n'a pas de console : si la collecte echoue, la fenetre est
-le seul moyen pour l'utilisateur de le savoir. On verrouille donc :
+L'application n'a pas de console : si la collecte echoue, la fenetre est le
+seul moyen pour l'utilisateur de le savoir. On verrouille donc :
 
 * qu'elle s'ouvre quand un probleme existe, et seulement alors ;
 * qu'elle montre le message exact de chaque source ;
@@ -64,6 +64,8 @@ class TestWindow(unittest.TestCase):
 
     def _destroy(self):
         try:
+            for identifier in self.root.tk.call("after", "info"):
+                self.root.tk.call("after", "cancel", identifier)
             self.root.destroy()
         except tk.TclError:
             pass
@@ -91,6 +93,26 @@ class TestWindow(unittest.TestCase):
             window = self._window(report_path=report, log_path=Path(tmp) / "absent.log")
         self.assertNotIn("disabled", window.buttons["report"].state())
         self.assertIn("disabled", window.buttons["log"].state())
+
+    def test_retry_button_exists_only_when_a_callback_is_given(self):
+        self.assertIn("disabled", self._window().buttons["retry"].state())
+        window = self._window(on_retry=lambda: None)
+        self.assertNotIn("disabled", window.buttons["retry"].state())
+
+    def test_retry_closes_the_window_then_runs_the_callback(self):
+        calls = []
+        window = self._window(on_retry=lambda: calls.append("relance"))
+        window.retry()
+        self.assertEqual(calls, ["relance"])
+        with self.assertRaises(tk.TclError):         # la fenetre n'existe plus
+            self.root.winfo_exists()
+
+    def test_embedded_window_does_not_close_its_parent(self):
+        window = error_window.ErrorWindow(problems(), explanation="x", parent=self.root)
+        window.present()
+        self.assertTrue(window.embedded)
+        window.root.destroy()
+        self.assertTrue(self.root.winfo_exists())
 
     def test_report_button_disabled_without_report(self):
         window = self._window(report_path=None, log_path=None)

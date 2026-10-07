@@ -46,14 +46,12 @@ ASSETS_DIR = PROJECT_DIR / "assets" if FROZEN else PACKAGE_DIR / "assets"
 CONFIG_FILE = PROJECT_DIR / "config.yaml"
 ENV_FILE = PROJECT_DIR / ".env"
 
-# Lanceur independant du repertoire courant. Le Planificateur de taches
-# Windows demarre ses taches depuis system32 : « python -m infoshebdo » n'y
-# trouverait pas le paquet, alors qu'un chemin absolu vers ce fichier suffit.
-# Sans objet en mode empaquete, ou l'executable se suffit a lui-meme.
+# Lanceur independant du repertoire courant. Le lancement au demarrage de
+# Windows et cron demarrent leurs programmes depuis un repertoire quelconque :
+# « python -m infoshebdo » n'y trouverait pas le paquet, alors qu'un chemin
+# absolu vers ce fichier suffit. Sans objet en mode empaquete, ou l'executable
+# se suffit a lui-meme.
 LAUNCHER = PROJECT_DIR / "run.py"
-
-# Executable empaquete sans console (voir infoshebdo.spec).
-WINDOWLESS_EXE = "InfosHebdo.exe"
 
 
 def db_path() -> Path:
@@ -70,16 +68,12 @@ def ensure_dirs() -> None:
 def command_prefix() -> list[str]:
     """Debut de la ligne de commande pour relancer l'outil.
 
-    Empaquete : l'executable sans console (InfosHebdo.exe), meme si la
-    commande est lancee depuis sa version console : inscrire celle-ci ferait
-    apparaitre une fenetre noire a chaque declenchement. Sinon : l'interpreteur
-    sans console suivi du lanceur. Utilise par la planification et par le
-    demarrage automatique, qui doivent tous deux pointer vers la bonne cible.
+    Empaquete : l'executable lui-meme (sans console). Sinon : l'interpreteur
+    sans console suivi du lanceur. Utilise par le lancement au demarrage de la
+    session, qui doit pointer vers la bonne cible.
     """
     if FROZEN:
-        executable = Path(sys.executable).resolve()
-        windowless = executable.with_name(WINDOWLESS_EXE)
-        return [str(windowless if windowless.exists() else executable)]
+        return [str(Path(sys.executable).resolve())]
 
     interpreter = Path(sys.executable)
     windowless = interpreter.with_name("pythonw.exe")

@@ -1,11 +1,11 @@
 """Interface en ligne de commande.
 
-Une commande suffit au fonctionnement automatique :
+L'application (`infoshebdo ui`, ou l'executable sans argument) fait tout
+toute seule : elle collecte chaque jour et ouvre le rapport chaque semaine. Ces
+commandes servent a la mise au point, au diagnostic, et a cron sous Linux :
 
-    infoshebdo auto             # planifiee : collecte du jour, puis ouvre le
-                                # rapport de la semaine s'il n'a pas ete vu
-
-Les autres servent a la mise au point et au diagnostic.
+    infoshebdo auto             # collecte du jour, puis ouvre le rapport de la
+                                # semaine s'il n'a pas ete vu
 """
 from __future__ import annotations
 
@@ -14,11 +14,12 @@ import logging
 import sys
 import traceback
 from datetime import date, datetime
+from pathlib import Path
 from logging.handlers import RotatingFileHandler
 
 from . import config as config_module
 from . import auto as auto_module
-from . import db, paths, report as report_module, scheduler, viewer
+from . import db, paths, report as report_module, viewer
 from .collectors import registry_instances
 from .collectors.base import market_label
 from .http import Client
@@ -141,7 +142,7 @@ def cmd_report(args, cfg) -> int:
 
 
 def _show_problems(args, problems, explanation: str) -> None:
-    """Fenetre d'erreur : la tache planifiee n'a pas de console.
+    """Fenetre d'erreur : un lancement automatique n'a pas de console.
 
     Un echec d'affichage (pas d'ecran, par exemple sous cron) ne doit pas
     masquer l'erreur initiale : elle est deja dans le journal.
@@ -158,7 +159,7 @@ def _show_problems(args, problems, explanation: str) -> None:
 
 
 def cmd_auto(args, cfg) -> int:
-    """Commande planifiee : collecte du jour, puis rapport de la semaine."""
+    """Verification automatique : collecte du jour, puis rapport de la semaine."""
     today = _parse_day(args.date)
     try:
         result = auto_module.run(cfg, today=today, force=args.force)
@@ -261,36 +262,15 @@ def cmd_ui(args, cfg) -> int:
     return launch(minimized=args.minimized)
 
 
-def cmd_startup(args, cfg) -> int:
-    """Lancement de l'interface (icone pres de l'horloge) a l'ouverture de session."""
-    from . import startup
-
-    try:
-        if args.action == "enable":
-            print(f"Lancement au demarrage active : {startup.enable()}")
-        elif args.action == "disable":
-            print(
-                "Lancement au demarrage desactive."
-                if startup.disable()
-                else "Lancement au demarrage : rien a desactiver."
-            )
-        else:
-            state = startup.status()
-            print(f"Lancement au demarrage : {state.summary}")
-            for line in startup.describe():
-                print(f"  {line}")
-    except startup.StartupError as exc:
-        print(f"Erreur : {exc}", file=sys.stderr)
-        return 1
-    return 0
-
-
 def cmd_selftest(args, cfg) -> int:
     """Verifie qu'une installation est complete : modules, gabarit, icone.
 
     Sert surtout apres la fabrication de l'executable : un module oublie par
-    PyInstaller ne se voit qu'au moment de s'en servir, donc un matin ou la
-    tache planifiee echoue. Ne cree rien et n'ouvre aucune fenetre.
+    PyInstaller ne se voit qu'au moment de s'en servir. Ne cree rien (hors
+    `--output`) et n'ouvre aucune fenetre.
+
+    L'executable n'a pas de console : `--output FICHIER` recopie le rapport dans
+    un fichier, que le script de fabrication relit.
     """
     import importlib
     from datetime import date as _date
@@ -298,21 +278,27 @@ def cmd_selftest(args, cfg) -> int:
     from . import assets
 
     failures = 0
+    lines: list[str] = []
+
+    def emit(line: str) -> None:
+        lines.append(line)
+        print(line)
 
     def check(name: str, probe) -> None:
         nonlocal failures
         try:
             detail = probe() or ""
-            print(f"[ok] {name}" + (f" : {detail}" if detail else ""))
+            emit(f"[ok] {name}" + (f" : {detail}" if detail else ""))
         except Exception as exc:  # noqa: BLE001 - on veut tout rapporter
             failures += 1
-            print(f"[KO] {name} : {type(exc).__name__}: {exc}")
+            emit(f"[KO] {name} : {type(exc).__name__}: {exc}")
 
     for module in ("requests", "bs4", "lxml.etree", "yaml", "jinja2", "dotenv",
                    "tkinter", "PIL", "pystray"):
         check(f"module {module}", lambda m=module: importlib.import_module(m) and "")
 
-    for module in ("infoshebdo.ui.app", "infoshebdo.ui.error_window", "infoshebdo.ui.tray"):
+    for module in ("infoshebdo.resident", "infoshebdo.instance", "infoshebdo.ui.app",
+                   "infoshebdo.ui.error_window", "infoshebdo.ui.tray"):
         check(f"module {module}", lambda m=module: importlib.import_module(m) and "")
 
     def template() -> str:
@@ -339,7 +325,10 @@ def cmd_selftest(args, cfg) -> int:
     check("icone", icon)
     check("dossier de donnees", lambda: str(paths.PROJECT_DIR))
 
-    print(f"\n{'Installation complete.' if not failures else f'{failures} verification(s) en echec.'}")
+    emit("")
+    emit("Installation complete." if not failures else f"{failures} verification(s) en echec.")
+    if args.output:
+        Path(args.output).write_text("\n".join(lines) + "\n", encoding="utf-8")
     return 1 if failures else 0
 
 
@@ -351,37 +340,6 @@ def cmd_config(args, cfg) -> int:
         return 0
     print(f"# fichier : {paths.CONFIG_FILE}")
     print(config_module.render_yaml(cfg.raw))
-    return 0
-
-
-def cmd_schedule(args, cfg) -> int:
-    """Installe, supprime ou affiche les taches planifiees."""
-    try:
-        if args.action == "install":
-            for line in scheduler.install(time=args.time):
-                print(line)
-            return 0
-        if args.action == "remove":
-            for line in scheduler.uninstall():
-                print(line)
-            return 0
-    except scheduler.SchedulerError as exc:
-        print(f"Erreur : {exc}", file=sys.stderr)
-        return 1
-
-    print("Ce qui est inscrit dans la tache :")
-    for line in scheduler.describe():
-        print(f"  {line}")
-    print()
-    print("Etat actuel :")
-    for state in scheduler.status():
-        print(f"  {state.name:<22} {state.summary}")
-        if state.exists and state.last_result:
-            print(f"  {'':<22} dernier resultat : {state.last_result}")
-    if not scheduler.is_supported():
-        print()
-        print("Hors Windows, planifier avec cron (tous les jours) :")
-        print(f"  0 9 * * *  {sys.executable} {paths.LAUNCHER} auto")
     return 0
 
 
@@ -426,7 +384,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     auto_parser = subparsers.add_parser(
         "auto",
-        help="commande planifiee : collecte du jour, puis ouvre le rapport de la "
+        help="verification automatique : collecte du jour, puis ouvre le rapport de la "
              "semaine s'il n'a pas encore ete vu",
     )
     auto_parser.add_argument("--date", help="date de reference (AAAA-MM-JJ)")
@@ -455,19 +413,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     ui_parser.set_defaults(func=cmd_ui)
 
-    startup_parser = subparsers.add_parser(
-        "startup",
-        help="lancer l'interface (icone pres de l'horloge) a l'ouverture de session",
-    )
-    startup_parser.add_argument(
-        "action", nargs="?", default="status", choices=["status", "enable", "disable"],
-        help="status (defaut), enable ou disable",
-    )
-    startup_parser.set_defaults(func=cmd_startup)
-
-    subparsers.add_parser(
+    selftest_parser = subparsers.add_parser(
         "selftest", help="verifier qu'une installation est complete (modules, gabarit, icone)"
-    ).set_defaults(func=cmd_selftest)
+    )
+    selftest_parser.add_argument(
+        "--output", metavar="FICHIER", help="recopier le rapport dans ce fichier"
+    )
+    selftest_parser.set_defaults(func=cmd_selftest)
 
     config_parser = subparsers.add_parser(
         "config", help="afficher la configuration effective"
@@ -478,28 +430,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     config_parser.set_defaults(func=cmd_config)
 
-    schedule_parser = subparsers.add_parser(
-        "schedule", help="planifier la tache quotidienne (collecte + rapport de la semaine)"
-    )
-    schedule_parser.add_argument(
-        "action", nargs="?", default="status",
-        choices=["status", "install", "remove"],
-        help="status (defaut), install ou remove",
-    )
-    schedule_parser.add_argument(
-        "--time", default="09:00", metavar="HH:MM",
-        help="heure du declenchement quotidien (defaut 09:00)",
-    )
-    schedule_parser.set_defaults(func=cmd_schedule)
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
-    args = parser.parse_args(argv)
+    # Sans argument (double-clic sur l'executable) : l'application.
+    args = parser.parse_args(list(sys.argv[1:] if argv is None else argv) or ["ui"])
     _setup_logging(args.verbose)
-
-    from pathlib import Path
 
     cfg = config_module.load(Path(args.config) if args.config else None)
     try:

@@ -21,7 +21,6 @@ l'utilisateur.
 from __future__ import annotations
 
 import os
-import subprocess
 from dataclasses import dataclass
 
 from . import paths
@@ -122,29 +121,6 @@ def disable() -> bool:
     except OSError as exc:
         raise StartupError(f"suppression dans le registre refusee : {exc}") from exc
     return True
-
-
-def launch_detached(arguments: list[str]) -> None:
-    """Relance l'outil dans un processus independant.
-
-    Sert au bouton « Tester le lancement au demarrage » : on veut reproduire
-    exactement ce que fera Windows, sans bloquer l'interface courante.
-    """
-    command = paths.command_prefix() + arguments
-    creation = 0
-    if os.name == "nt":
-        creation = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(
-            subprocess, "CREATE_NEW_PROCESS_GROUP", 0
-        )
-    subprocess.Popen(  # noqa: S603 - commande construite par le programme
-        command,
-        cwd=str(paths.PROJECT_DIR),
-        creationflags=creation,
-        close_fds=True,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
 
 
 def describe() -> list[str]:

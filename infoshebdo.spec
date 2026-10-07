@@ -4,19 +4,14 @@
 A lancer par `python build_exe.py`, pas a la main : le script genere l'icone,
 verifie le resultat et l'installe.
 
-Deux executables partagent les memes bibliotheques (un seul dossier) :
-
-* InfosHebdo.exe          sans console : l'interface, et la tache planifiee.
-                          Une console noire ne doit jamais apparaitre chaque
-                          matin ;
-* InfosHebdo-console.exe  avec console : pour les commandes (`status`,
-                          `schedule install`, `selftest`...) dont on veut lire
-                          la sortie. Un executable sans console ne peut pas
-                          ecrire dans le terminal qui l'a lance.
+Un seul executable, sans console : une application residente qui s'ouvre par
+double-clic et demarre avec la session ne doit jamais faire apparaitre une
+fenetre noire. Les commandes (`status`, `collect`...) restent disponibles par
+`python -m infoshebdo` depuis les sources.
 
 Format « dossier » plutot que « fichier unique » : un fichier unique
-s'extrait dans un dossier temporaire a chaque lancement, ce qui ralentit
-chaque declenchement de la tache planifiee et alerte davantage les antivirus.
+s'extrait dans un dossier temporaire a chaque lancement, ce qui ralentit chaque
+demarrage de session et alerte davantage les antivirus.
 """
 from pathlib import Path
 
@@ -70,28 +65,21 @@ analysis = Analysis(  # noqa: F821
 )
 pyz = PYZ(analysis.pure)  # noqa: F821
 
-
-def make_exe(name: str, console: bool):
-    return EXE(  # noqa: F821
-        pyz,
-        analysis.scripts,
-        [],
-        exclude_binaries=True,
-        name=name,
-        console=console,
-        icon=str(ICON),
-        debug=False,
-        strip=False,
-        upx=False,
-    )
-
-
-gui = make_exe("InfosHebdo", console=False)
-cli = make_exe("InfosHebdo-console", console=True)
+exe = EXE(  # noqa: F821
+    pyz,
+    analysis.scripts,
+    [],
+    exclude_binaries=True,
+    name="InfosHebdo",
+    console=False,
+    icon=str(ICON),
+    debug=False,
+    strip=False,
+    upx=False,
+)
 
 COLLECT(  # noqa: F821
-    gui,
-    cli,
+    exe,
     analysis.binaries,
     analysis.datas,
     strip=False,

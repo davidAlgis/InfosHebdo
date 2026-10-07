@@ -25,20 +25,22 @@ from infoshebdo import auto, db, paths, viewer
 from infoshebdo.config import DEFAULTS, Config
 from infoshebdo.pipeline import CollectorOutcome, CollectRun
 
-# Lundi et jours voisins de la semaine ISO 2026-W41, puis la suivante.
-MONDAY = date(2026, 10, 5)
-TUESDAY = date(2026, 10, 6)
-WEDNESDAY = date(2026, 10, 7)
-NEXT_MONDAY = date(2026, 10, 12)
+# Lundi et jours voisins de la semaine ISO 2030-W41, puis la suivante. Une
+# semaine lointaine : les tests ne doivent pas dependre du jour ou on les lance
+# (la collecte, elle, est datee d'aujourd'hui, la vraie date).
+MONDAY = date(2030, 10, 7)
+TUESDAY = date(2030, 10, 8)
+WEDNESDAY = date(2030, 10, 9)
+NEXT_MONDAY = date(2030, 10, 14)
 
 
 class TestWeekKey(unittest.TestCase):
     def test_whole_week_shares_a_key(self):
-        keys = {viewer.week_key(date(2026, 10, d)) for d in range(5, 12)}
-        self.assertEqual(keys, {"2026-W41"})
+        keys = {viewer.week_key(date(2030, 10, d)) for d in range(7, 14)}
+        self.assertEqual(keys, {"2030-W41"})
 
     def test_monday_starts_a_new_week(self):
-        self.assertEqual(viewer.week_key(NEXT_MONDAY), "2026-W42")
+        self.assertEqual(viewer.week_key(NEXT_MONDAY), "2030-W42")
 
     def test_iso_year_differs_from_calendar_year(self):
         # Le 1er janvier 2027 appartient a la semaine 53 de 2026, et le
@@ -168,7 +170,7 @@ class TestWeeklyOpening(AutoCase):
 
     def test_report_file_is_written_even_when_empty_database(self):
         result = self.go(MONDAY)
-        self.assertEqual(result.report_path.name, "infoshebdo-2026-10-05.html")
+        self.assertEqual(result.report_path.name, "infoshebdo-2030-10-07.html")
         html = result.report_path.read_text(encoding="utf-8")
         self.assertIn("<!doctype html>", html)
 
@@ -326,7 +328,7 @@ class TestCollectionFailures(AutoCase):
         self.browser_works = False
         result = self.go(MONDAY)
         self.assertEqual([p.source for p in result.problems], ["Navigateur"])
-        self.assertIn("infoshebdo-2026-10-05.html", result.problems[0].message)
+        self.assertIn("infoshebdo-2030-10-07.html", result.problems[0].message)
         self.assertIn("n'a pas pu etre ouvert", result.explanation)
 
     def test_clean_run_has_no_problem_and_no_warning(self):

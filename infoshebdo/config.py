@@ -45,18 +45,13 @@ DEFAULTS: dict[str, Any] = {
         # Ouverture automatique du rapport, une fois par semaine.
         "auto_open": True,
     },
-    "interface": {
-        "tray": True,
-        "minimize_after_first_use": True,
-        "close_to_tray": True,
-    },
 }
 
 # Cles d'anciennes versions (envoi par courriel). On les retire au chargement :
 # `save` verifie que le rendu se relit a l'identique, et une cle que le rendu
 # ne connait plus ferait refuser tout enregistrement.
 LEGACY_KEYS: dict[str, tuple[str, ...]] = {
-    "": ("email",),
+    "": ("email", "interface"),
     "report": ("attach_html", "open_after_send", "open_on_ui_start"),
 }
 
@@ -101,10 +96,6 @@ class Config:
     def report(self) -> dict:
         return self.raw["report"]
 
-    @property
-    def interface(self) -> dict:
-        return self.raw["interface"]
-
     def source_enabled(self, section: str, name: str) -> bool:
         """True si la source `name` de la section `box_office`/`games` est active."""
         block = self.raw.get(section, {})
@@ -147,11 +138,10 @@ def load(config_file: Path | None = None) -> Config:
 # --------------------------------------------------------------------------- #
 # Ecriture
 #
-# L'interface Tkinter doit pouvoir reecrire config.yaml sans que le fichier
-# devienne illisible a la main. PyYAML ne sait pas conserver les commentaires
-# d'un fichier existant : on regenere donc le fichier entier a partir d'un
-# gabarit qui porte les commentaires. Les deux chemins de configuration
-# (fichier edite a la main, interface graphique) restent ainsi equivalents.
+# `save` (commande `config --write`) doit pouvoir reecrire config.yaml sans que
+# le fichier devienne illisible a la main. PyYAML ne sait pas conserver les
+# commentaires d'un fichier existant : on regenere donc le fichier entier a
+# partir d'un gabarit qui porte les commentaires.
 # --------------------------------------------------------------------------- #
 def _scalar(value: Any) -> str:
     if isinstance(value, bool):
@@ -178,16 +168,16 @@ def render_yaml(raw: dict[str, Any]) -> str:
     games = raw.get("games", {})
     platforms = games.get("all_platforms", {}) or {}
     report = raw.get("report", {})
-    interface = raw.get("interface", {})
     lines: list[str] = []
     out = lines.append
 
     out("# " + "-" * 73)
     out("# InfosHebdo - configuration de la veille")
     out("#")
-    out("# Ce fichier est editable a la main et reecrit par l'interface")
-    out("# graphique (infoshebdo ui). Les commentaires sont regeneres a chaque")
-    out("# enregistrement : ne pas y ajouter de notes personnelles.")
+    out("# Ce fichier est editable a la main (relu a chaque verification, pas")
+    out("# besoin de relancer InfosHebdo). Il peut etre reecrit par")
+    out("# `infoshebdo config --write` : les commentaires sont alors regeneres,")
+    out("# ne pas y ajouter de notes personnelles.")
     out("#")
     out("# Variables facultatives (INFOSHEBDO_DB, INFOSHEBDO_HTTP_DELAY) : .env.")
     out("# " + "-" * 73)
@@ -253,19 +243,9 @@ def render_yaml(raw: dict[str, Any]) -> str:
     out("  # source est tombee).")
     out(f"  empty_sections: {_scalar(report.get('empty_sections'))}")
     out("  # Ouvrir le rapport dans le navigateur, une seule fois par semaine : le")
-    out("  # premier jour ou la tache planifiee tourne (lundi si le poste est")
-    out("  # allume, sinon mardi, etc.).")
+    out("  # premier jour ou InfosHebdo est lance (lundi si le poste est allume,")
+    out("  # sinon mardi, etc.).")
     out(f"  auto_open: {_scalar(report.get('auto_open'))}")
-    out("")
-    out("interface:")
-    out("  # Icone dans la zone de notification, pres de l'horloge.")
-    out(f"  tray: {_scalar(interface.get('tray'))}")
-    out("  # Se replier dans la zone de notification apres le premier")
-    out("  # traitement lance dans la session.")
-    out(f"  minimize_after_first_use: {_scalar(interface.get('minimize_after_first_use'))}")
-    out("  # La croix de fermeture replie au lieu de quitter. « Quitter » reste")
-    out("  # accessible par le menu de l'icone.")
-    out(f"  close_to_tray: {_scalar(interface.get('close_to_tray'))}")
     out("")
     out("")
     return "\n".join(lines)

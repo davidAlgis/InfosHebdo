@@ -1,9 +1,10 @@
 # -------------------------------------------------------------------------
 # InfosHebdo - configuration de la veille
 #
-# Ce fichier est editable a la main et reecrit par l'interface
-# graphique (infoshebdo ui). Les commentaires sont regeneres a chaque
-# enregistrement : ne pas y ajouter de notes personnelles.
+# Ce fichier est editable a la main (relu a chaque verification, pas
+# besoin de relancer InfosHebdo). Il peut etre reecrit par
+# `infoshebdo config --write` : les commentaires sont alors regeneres,
+# ne pas y ajouter de notes personnelles.
 #
 # Variables facultatives (INFOSHEBDO_DB, INFOSHEBDO_HTTP_DELAY) : .env.
 # -------------------------------------------------------------------------
@@ -72,14 +73,4 @@ report:
   # premier jour ou la tache planifiee tourne (lundi si le poste est
   # allume, sinon mardi, etc.).
   auto_open: true
-
-interface:
-  # Icone dans la zone de notification, pres de l'horloge.
-  tray: true
-  # Se replier dans la zone de notification apres le premier
-  # traitement lance dans la session.
-  minimize_after_first_use: true
-  # La croix de fermeture replie au lieu de quitter. « Quitter » reste
-  # accessible par le menu de l'icone.
-  close_to_tray: true
 

@@ -34,8 +34,13 @@ def available() -> bool:
 class TrayIcon:
     """Enveloppe de pystray, sans dependance a Tk."""
 
-    def __init__(self, commands: queue.Queue) -> None:
+    def __init__(
+        self, commands: queue.Queue, autostart_checked: Callable[[], bool] | None = None
+    ) -> None:
         self.commands = commands
+        # Fournie par l'application : lit l'etat reel (registre) a chaque
+        # ouverture du menu. None : pas de case « lancer au demarrage ».
+        self.autostart_checked = autostart_checked
         self._icon = None
 
     # ------------------------------------------------------------------ #
@@ -57,15 +62,23 @@ class TrayIcon:
 
         from .. import assets
 
-        menu = pystray.Menu(
+        items = [
             pystray.MenuItem("Ouvrir InfosHebdo", self._post("show"), default=True),
             pystray.Menu.SEPARATOR,
-            pystray.MenuItem("Collecter maintenant", self._post("collect")),
-            pystray.MenuItem("Generer et ouvrir le rapport", self._post("report")),
-            pystray.MenuItem("Ouvrir le dernier rapport", self._post("open_report")),
+            pystray.MenuItem("Rechercher les donnees", self._post("search")),
+            pystray.MenuItem("Ouvrir le rapport", self._post("report")),
             pystray.Menu.SEPARATOR,
-            pystray.MenuItem("Quitter", self._post("quit")),
-        )
+        ]
+        if self.autostart_checked is not None:
+            items.append(
+                pystray.MenuItem(
+                    "Lancer au demarrage de Windows",
+                    self._post("toggle_autostart"),
+                    checked=lambda _item: bool(self.autostart_checked()),
+                )
+            )
+        items.append(pystray.MenuItem("Quitter", self._post("quit")))
+        menu = pystray.Menu(*items)
 
         try:
             self._icon = pystray.Icon(
@@ -81,6 +94,14 @@ class TrayIcon:
             self._icon = None
             return False
         return True
+
+    def refresh_menu(self) -> None:
+        """Releit les cases a cocher (apres un changement fait depuis le menu)."""
+        if self._icon is not None:
+            try:
+                self._icon.update_menu()
+            except Exception as exc:  # noqa: BLE001
+                log.debug("menu de l'icone non actualise : %s", exc)
 
     @property
     def running(self) -> bool:

@@ -126,6 +126,17 @@ class TestLegacyConfig(unittest.TestCase):
         self.assertEqual(cfg.report["title"], "Mon titre")
         self.assertTrue(cfg.report["auto_open"])
 
+    def test_interface_settings_of_the_old_window_are_ignored(self):
+        # L'ancienne fenetre a onglets reglait l'icone et le repli ; il n'y a
+        # plus de reglage : ces cles ne doivent ni gener ni empecher de reecrire.
+        cfg = self._load("top_n: 7\ninterface:\n  tray: false\n  close_to_tray: false\n")
+        self.assertNotIn("interface", cfg.raw)
+        self.assertEqual(cfg.top_n, 7)
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "config.yaml"
+            config_module.save(cfg.raw, target)
+            self.assertNotIn("interface", target.read_text(encoding="utf-8"))
+
     def test_legacy_config_can_be_saved_back(self):
         # Sans le nettoyage, `save` refuserait : le rendu ne connait plus ces
         # cles, donc ne se relirait pas a l'identique.

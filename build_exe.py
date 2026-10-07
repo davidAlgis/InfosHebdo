@@ -2,11 +2,13 @@
 """Construit l'executable d'InfosHebdo et l'installe pour l'utilisateur courant.
 
     python build_exe.py                  # tests, build, verification, installation
-    python build_exe.py --register       # + tache planifiee et icone au demarrage
     python build_exe.py --no-install     # build seulement (resultat dans build/dist)
 
 Destination par defaut : %LOCALAPPDATA%\\Programs\\InfosHebdo, le dossier que
 Windows reserve aux programmes installes sans droits administrateur.
+
+Il n'y a rien d'autre a faire apres : au premier lancement de InfosHebdo.exe,
+l'application s'inscrit seule au demarrage de la session et ouvre le rapport.
 
 Etapes, dans l'ordre. Chacune s'arrete net a la premiere erreur :
 
@@ -16,11 +18,10 @@ Etapes, dans l'ordre. Chacune s'arrete net a la premiere erreur :
 3. PyInstaller, d'apres infoshebdo.spec ;
 4. une verification de l'executable fabrique, AVANT toute installation :
    `selftest` verifie que chaque module et ressource a bien ete embarque. Un
-   module oublie ne se voit sinon qu'un matin ou la tache planifiee echoue ;
-5. l'installation : on remplace ce que le programme livre (les executables et
-   leur dossier interne), jamais les donnees de l'utilisateur
-   (config.yaml, .env, data/, reports/, logs/) ;
-6. avec --register : tache planifiee et lancement de l'icone au demarrage.
+   module oublie ne se voit sinon qu'au moment de s'en servir ;
+5. l'installation : on remplace ce que le programme livre (l'executable et son
+   dossier interne), jamais les donnees de l'utilisateur
+   (config.yaml, .env, data/, reports/, logs/).
 """
 from __future__ import annotations
 
@@ -41,8 +42,11 @@ SPEC_FILE = ROOT / "infoshebdo.spec"
 
 APP = "InfosHebdo"
 APP_DIR_NAME = "InfosHebdo"          # dossier produit par PyInstaller (COLLECT name)
-GUI_EXE = "InfosHebdo.exe"
-CLI_EXE = "InfosHebdo-console.exe"
+EXE = "InfosHebdo.exe"
+
+# Livre par une version precedente, a retirer : ses commandes sont desormais
+# dans l'application, et un ancien executable avec console ne doit pas rester.
+LEGACY_FILES = ("InfosHebdo-console.exe",)
 
 # Ce qui appartient a l'utilisateur : jamais ecrase, jamais supprime.
 USER_DATA = ("config.yaml", ".env", "data", "reports", "logs")
@@ -96,7 +100,7 @@ def check_environment() -> None:
     if os.name != "nt":
         raise BuildError(
             "Ce script fabrique un executable Windows. Sous Linux ou macOS, "
-            "lancer simplement `python run.py auto` depuis cron."
+            "lancer simplement `python run.py ui`, ou `python run.py auto` depuis cron."
         )
     try:
         import PyInstaller  # noqa: F401
@@ -156,9 +160,8 @@ def build(clean: bool) -> Path:
         raise BuildError(f"PyInstaller a echoue :\n{tail}")
 
     output = DIST_DIR / APP_DIR_NAME
-    for exe in (GUI_EXE, CLI_EXE):
-        if not (output / exe).exists():
-            raise BuildError(f"{exe} absent du resultat de PyInstaller ({output}).")
+    if not (output / EXE).exists():
+        raise BuildError(f"{EXE} absent du resultat de PyInstaller ({output}).")
     return output
 
 
@@ -169,37 +172,39 @@ def shipped_entries(output: Path) -> list[str]:
 
 
 def smoke_test(output: Path) -> None:
-    """Fait tourner l'executable fabrique, sans rien ecrire hors du dossier de build."""
+    """Fait tourner l'executable fabrique, sans rien ecrire hors du dossier de build.
+
+    L'executable n'a pas de console : son rapport passe par un fichier
+    (`selftest --output`), et son code retour dit si tout va bien.
+    """
     with tempfile.TemporaryDirectory() as tmp:
-        env = {**os.environ, "INFOSHEBDO_DB": str(Path(tmp) / "essai.sqlite3")}
-
-        console = run([str(output / CLI_EXE), "selftest"], env=env, cwd=tmp)
-        for line in console.out.strip().splitlines():
-            info(line)
-        if console.returncode != 0:
+        report = Path(tmp) / "selftest.txt"
+        env = {
+            **os.environ,
+            "INFOSHEBDO_DB": str(Path(tmp) / "essai.sqlite3"),
+            "INFOSHEBDO_NO_AUTOSTART": "1",     # ne rien inscrire dans le registre
+        }
+        result = run(
+            [str(output / EXE), "selftest", "--output", str(report)],
+            env=env, cwd=tmp, timeout=120,
+        )
+        if report.exists():
+            for line in report.read_text(encoding="utf-8").strip().splitlines():
+                info(line)
+        if result.returncode != 0:
             raise BuildError(
-                f"`{CLI_EXE} selftest` echoue (code {console.returncode}). "
-                "Un module ou une ressource manque dans l'executable.\n" + console.err
+                f"`{EXE} selftest` echoue (code {result.returncode}). "
+                "Un module ou une ressource manque dans l'executable."
             )
 
-        # L'executable sans console est celui de la tache planifiee : on
-        # verifie qu'il demarre et rend un code retour, meme s'il n'ecrit nulle part.
-        windowed = run([str(output / GUI_EXE), "selftest"], env=env, cwd=tmp, timeout=120)
-        if windowed.returncode != 0:
-            raise BuildError(
-                f"`{GUI_EXE} selftest` echoue (code {windowed.returncode})."
-            )
-        info(f"{GUI_EXE} : demarre et verifie (code 0).")
 
-
-def is_running(exe: str = GUI_EXE) -> bool:
-    result = run(["tasklist", "/FI", f"IMAGENAME eq {exe}", "/FO", "CSV", "/NH"])
-    return exe.lower() in result.out.lower()
+def is_running() -> bool:
+    result = run(["tasklist", "/FI", f"IMAGENAME eq {EXE}", "/FO", "CSV", "/NH"])
+    return EXE.lower() in result.out.lower()
 
 
 def stop_running() -> None:
-    for exe in (GUI_EXE, CLI_EXE):
-        run(["taskkill", "/F", "/IM", exe])
+    run(["taskkill", "/F", "/IM", EXE])
 
 
 def check_destination(dest: Path) -> None:
@@ -207,7 +212,7 @@ def check_destination(dest: Path) -> None:
     if not dest.exists():
         return
     entries = {entry.name for entry in dest.iterdir()}
-    if entries and not (entries & {GUI_EXE, CLI_EXE, "config.yaml", "data"}):
+    if entries and not (entries & {EXE, *LEGACY_FILES, "config.yaml", "data"}):
         raise BuildError(
             f"{dest} existe, n'est pas vide et ne ressemble pas a une installation "
             "d'InfosHebdo. Choisir un autre dossier avec --dest."
@@ -217,13 +222,13 @@ def check_destination(dest: Path) -> None:
 def install(output: Path, entries: list[str], dest: Path, with_data: bool, kill: bool) -> None:
     check_destination(dest)
 
-    if is_running() or is_running(CLI_EXE):
+    if is_running():
         if not kill:
             raise BuildError(
                 "InfosHebdo est en cours d'execution : ses fichiers sont verrouilles.\n"
                 "    Le quitter (icone pres de l'horloge -> Quitter), ou relancer avec --kill."
             )
-        info("Arret des processus InfosHebdo en cours...")
+        info("Arret d'InfosHebdo en cours...")
         stop_running()
 
     dest.mkdir(parents=True, exist_ok=True)
@@ -243,6 +248,11 @@ def install(output: Path, entries: list[str], dest: Path, with_data: bool, kill:
         else:
             shutil.copy2(source, target)
     info(f"Programme installe dans {dest}")
+
+    for legacy in LEGACY_FILES:
+        if (dest / legacy).exists():
+            (dest / legacy).unlink()
+            info(f"Ancien fichier supprime : {legacy}")
 
     # Reprise des reglages et de l'historique du depot, sans jamais ecraser.
     config_source = ROOT / "config.yaml"
@@ -269,19 +279,6 @@ def copy_data(dest: Path) -> None:
         info("Dossier d'import manuel repris du depot.")
 
 
-def register(dest: Path) -> None:
-    """Tache planifiee et lancement de l'icone a l'ouverture de session."""
-    console = dest / CLI_EXE
-    for arguments in (["schedule", "install"], ["startup", "enable"]):
-        result = run([str(console), *arguments], cwd=dest)
-        for line in result.out.strip().splitlines():
-            info(line)
-        if result.returncode != 0:
-            raise BuildError(
-                f"`{CLI_EXE} {' '.join(arguments)}` echoue :\n{result.err.strip()}"
-            )
-
-
 # --------------------------------------------------------------------------- #
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -301,8 +298,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                         help="arreter InfosHebdo s'il tourne, pour pouvoir le remplacer")
     parser.add_argument("--with-data", action="store_true",
                         help="reprendre la base et les imports du depot (sans ecraser)")
-    parser.add_argument("--register", action="store_true",
-                        help="inscrire la tache planifiee et le lancement de l'icone a la session")
     return parser.parse_args(argv)
 
 
@@ -336,10 +331,6 @@ def main(argv: list[str] | None = None) -> int:
         step(5, f"Installation dans {dest}")
         install(output, entries, dest, args.with_data, args.kill)
 
-        if args.register:
-            step(6, "Tache planifiee et lancement a l'ouverture de session")
-            register(dest)
-
     except BuildError as exc:
         print(f"\nERREUR : {exc}", file=sys.stderr)
         return 1
@@ -348,13 +339,10 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     print("\nTermine.")
-    print(f"  Executable   : {dest / GUI_EXE}")
-    print(f"  Console      : {dest / CLI_EXE}")
-    if not args.register:
-        print("\nPour activer l'ouverture automatique du rapport et l'icone pres de l'horloge :")
-        print(f'  "{dest / CLI_EXE}" schedule install')
-        print(f'  "{dest / CLI_EXE}" startup enable')
-        print("  (ou relancer ce script avec --register)")
+    print(f"  Application : {dest / EXE}")
+    print("\nLancer InfosHebdo.exe une fois. Il s'inscrit seul au demarrage de Windows,")
+    print("recupere les donnees et ouvre le rapport de la semaine ; ensuite il reste")
+    print("dans la zone de notification (pres de l'horloge).")
     return 0
 
 

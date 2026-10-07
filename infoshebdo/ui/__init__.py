@@ -1,7 +1,7 @@
 """Interface graphique Tkinter.
 
-Importee a la demande par `infoshebdo ui` : Tkinter n'est pas charge lors
-d'une collecte planifiee, qui tourne sans affichage.
+Importee a la demande par `infoshebdo ui` : Tkinter n'est pas charge par les
+commandes qui tournent sans affichage (collecte, rapport).
 """
 from __future__ import annotations
 

@@ -1,10 +1,4 @@
-"""Tests des chemins : surtout l'executable que la planification doit inscrire.
-
-Empaquete, il existe deux executables : l'un sans console, l'autre avec. La
-tache planifiee et le lancement a la session doivent toujours viser le
-premier, quel que soit celui avec lequel on les a installes : sinon une
-console noire s'ouvre a chaque declenchement.
-"""
+"""Tests des chemins : l'executable que le lancement au demarrage doit inscrire."""
 from __future__ import annotations
 
 import sys
@@ -13,34 +7,39 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from infoshebdo import paths
+from infoshebdo import paths, startup
 
 
 class TestFrozenCommandPrefix(unittest.TestCase):
-    def setUp(self):
-        self._dir = tempfile.TemporaryDirectory()
-        self.addCleanup(self._dir.cleanup)
-        self.root = Path(self._dir.name)
-        (self.root / "InfosHebdo.exe").write_bytes(b"")
-        (self.root / "InfosHebdo-console.exe").write_bytes(b"")
+    def test_packaged_application_runs_the_executable_itself(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            exe = Path(tmp) / "InfosHebdo.exe"
+            exe.write_bytes(b"")
+            with mock.patch.object(paths, "FROZEN", True), \
+                 mock.patch.object(sys, "executable", str(exe)):
+                self.assertEqual(paths.command_prefix(), [str(exe.resolve())])
 
-    def _prefix(self, executable: str) -> list[str]:
-        with mock.patch.object(paths, "FROZEN", True), \
-             mock.patch.object(sys, "executable", str(self.root / executable)):
-            return paths.command_prefix()
+    def test_startup_entry_launches_the_ui_minimized(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            exe = Path(tmp) / "InfosHebdo.exe"
+            exe.write_bytes(b"")
+            with mock.patch.object(paths, "FROZEN", True), \
+                 mock.patch.object(sys, "executable", str(exe)):
+                command = startup.startup_command()
+        self.assertTrue(command.startswith('"'))
+        self.assertTrue(command.endswith("InfosHebdo.exe\" ui --minimized"))
 
-    def test_windowless_exe_is_used_when_launched_from_it(self):
-        self.assertEqual(self._prefix("InfosHebdo.exe"), [str(self.root / "InfosHebdo.exe")])
-
-    def test_windowless_exe_is_preferred_when_launched_from_the_console_one(self):
-        self.assertEqual(
-            self._prefix("InfosHebdo-console.exe"), [str(self.root / "InfosHebdo.exe")]
-        )
-
-    def test_falls_back_to_the_running_exe_if_the_sibling_is_missing(self):
-        (self.root / "InfosHebdo.exe").unlink()
-        console = str((self.root / "InfosHebdo-console.exe").resolve())
-        self.assertEqual(self._prefix("InfosHebdo-console.exe"), [console])
+    def test_spaced_install_path_is_quoted_in_the_registry_value(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp) / "Mes Programmes"
+            folder.mkdir()
+            exe = folder / "InfosHebdo.exe"
+            exe.write_bytes(b"")
+            with mock.patch.object(paths, "FROZEN", True), \
+                 mock.patch.object(sys, "executable", str(exe)):
+                command = startup.startup_command()
+        self.assertIn('"', command.split(" ui --minimized")[0])
+        self.assertIn("Mes Programmes", command)
 
 
 class TestSourceCommandPrefix(unittest.TestCase):
@@ -49,6 +48,10 @@ class TestSourceCommandPrefix(unittest.TestCase):
             prefix = paths.command_prefix()
         self.assertEqual(prefix[-1], str(paths.LAUNCHER))
         self.assertIn("-X", prefix)
+
+    def test_launcher_is_absolute(self):
+        # Le lancement a la session part d'un repertoire quelconque.
+        self.assertTrue(paths.LAUNCHER.is_absolute())
 
 
 if __name__ == "__main__":

@@ -1,8 +1,8 @@
-"""Commande planifiee : collecte du jour, puis rapport de la semaine.
+"""Verification automatique : collecte du jour, puis rapport de la semaine.
 
-C'est l'unique chose que le Planificateur de taches lance. Elle est declenchee
-tous les jours et a chaque ouverture de session, donc plusieurs fois par jour
-dans certains cas : chaque etape verifie d'abord si elle a deja ete faite.
+Appelee par l'application residente (au demarrage, puis toutes les 30
+minutes) et par `infoshebdo auto` (cron sous Linux). Elle peut donc tourner
+plusieurs fois par jour : chaque etape verifie d'abord si elle a deja ete faite.
 
 * collecte : une fois par jour. Elle alimente la base meme les jours ou le
   rapport ne s'ouvre pas, parce que les joueurs simultanes Steam sont un
@@ -80,6 +80,14 @@ class AutoResult:
         )
 
 
+def problems_from(run_: "pipeline.CollectRun") -> list[Problem]:
+    """Les sources en erreur d'une collecte, plus l'echec d'agregation eventuel."""
+    problems = [Problem(source=o.label or o.name, message=o.error) for o in run_.failed]
+    if run_.derive_error:
+        problems.append(Problem(source="Agregat box-office monde", message=run_.derive_error))
+    return problems
+
+
 def _notices(result: AutoResult, failed_labels: list[str]) -> list[str]:
     """Avertissements a afficher en tete du rapport."""
     if result.all_failed:
@@ -132,13 +140,7 @@ def run(
         result.collect_failures = len(run_.failed)
         result.all_failed = run_.all_failed
         failed_labels = [o.label or o.name for o in run_.failed]
-        result.problems += [
-            Problem(source=o.label or o.name, message=o.error) for o in run_.failed
-        ]
-        if run_.derive_error:
-            result.problems.append(
-                Problem(source="Agregat box-office monde", message=run_.derive_error)
-            )
+        result.problems += problems_from(run_)
     else:
         log.info("collecte deja faite aujourd'hui, rien a relancer")
 

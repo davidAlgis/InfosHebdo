@@ -10,7 +10,7 @@ suite. Aucun compte, aucun serveur, aucun courriel.
 
 ```
 Sources Internet
-      ↓  collecte quotidienne (infoshebdo auto)
+      ↓  collecte quotidienne (l'application, toute seule)
 Base SQLite  (data/infoshebdo.sqlite3)
       ↓  analyse de la semaine
 Rapport HTML + texte  (reports/)
@@ -27,25 +27,11 @@ lendemain. Le rapport, lui, s'ouvre une fois par semaine.
 
 ## Installation
 
-```powershell
-cd D:\Recherches\Vendors\Programs\InfosHebdo
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
-
-python -m infoshebdo collect --backfill 12   # première fois : rattraper l'historique
-python -m infoshebdo report --open           # voir le rapport tout de suite
-python -m infoshebdo schedule install        # activer l'ouverture automatique
-```
-
-C'est tout. Le détail de ce que fait la tâche planifiée est dans
-[Automatisation](#automatisation).
-
-### Exécutable Windows (sans Python)
+### Windows : un exécutable, rien à configurer
 
 ```powershell
-pip install -r requirements-build.txt     # une fois : PyInstaller
-python build_exe.py --register
+pip install -r requirements.txt -r requirements-build.txt     # une fois
+python build_exe.py
 ```
 
 Le script lance les tests, fabrique l'exécutable avec PyInstaller, **le fait
@@ -54,68 +40,105 @@ dans `%LOCALAPPDATA%\Programs\InfosHebdo`, le dossier que Windows réserve aux
 programmes installés sans droits administrateur. Rien n'est écrit dans le dossier
 d'installation tant que la vérification n'a pas réussi.
 
-| Fichier installé | Rôle |
+**Il n'y a ensuite qu'à lancer `InfosHebdo.exe` une fois** (double-clic). Au
+premier lancement, l'application :
+
+1. s'inscrit au démarrage de Windows (entrée « Run » de votre compte, visible et
+   désactivable dans le Gestionnaire des tâches, onglet « Démarrage ») ;
+2. considère que c'est la première utilisation de la semaine : elle recherche les
+   données, puis **ouvre le rapport dans le navigateur** ;
+3. se replie dans la zone de notification, près de l'horloge.
+
+Elle attend ensuite la semaine suivante pour rouvrir le rapport. Il n'y a plus
+rien à lancer, ni tâche planifiée à créer.
+
+Contenu du dossier installé :
+
+| Élément | Rôle |
 | --- | --- |
-| `InfosHebdo.exe` | sans console : l'interface, et la tâche planifiée (aucune fenêtre noire chaque matin) |
-| `InfosHebdo-console.exe` | avec console : pour les commandes dont on veut lire la sortie (`status`, `schedule`, `selftest`...) |
-| `config.yaml`, `data/`, `reports/`, `logs/` | vos données, à côté des exécutables. **Une réinstallation n'y touche jamais** |
+| `InfosHebdo.exe` | l'application (sans console : aucune fenêtre noire) |
+| `config.yaml` | ce qui est suivi (voir plus bas) |
+| `data/`, `reports/`, `logs/` | base SQLite, rapports générés, journal. **Une réinstallation n'y touche jamais** |
 
-`--register` inscrit la tâche planifiée et le lancement de l'icône à
-l'ouverture de session ; sans lui, le script affiche les deux commandes à
-lancer (`InfosHebdo-console.exe schedule install`, puis `... startup enable`).
-Autres options : `--dest` (autre dossier), `--no-install` (fabriquer seulement,
-résultat dans `build/dist`), `--with-data` (reprendre la base et les imports du
-dépôt, sans jamais écraser), `--kill` (arrêter InfosHebdo s'il tourne, pour
-pouvoir le remplacer), `--skip-tests`, `--clean`.
+Options de `build_exe.py` : `--dest` (autre dossier), `--no-install` (fabriquer
+seulement, résultat dans `build/dist`), `--with-data` (reprendre la base et les
+imports du dépôt, sans jamais écraser), `--kill` (arrêter InfosHebdo s'il tourne,
+pour pouvoir le remplacer), `--skip-tests`, `--clean`. Pour mettre à jour,
+relancer le script : si l'application tourne, la quitter d'abord (icône →
+Quitter) ou ajouter `--kill`, ses fichiers étant verrouillés tant qu'elle tourne.
 
-Pour mettre à jour : relancer `python build_exe.py`. Si InfosHebdo tourne (icône
-près de l'horloge), le quitter d'abord ou ajouter `--kill` : ses fichiers sont
-verrouillés tant qu'il tourne.
+### L'application
 
-### Icône près de l'horloge
+**La fenêtre** n'a que deux boutons :
 
-L'interface peut rester résidente dans la zone de notification pour ouvrir le
-rapport **à tout moment**, pas seulement en début de semaine. Clic droit sur
-l'icône :
+* **Rechercher les données** : une collecte complète, à la demande ;
+* **Ouvrir le rapport** : reconstruit le rapport depuis la base et l'ouvre dans le
+  navigateur (utilisable à tout moment, pas seulement en début de semaine).
 
-* **Générer et ouvrir le rapport** : reconstruit le rapport depuis la base ;
-* **Ouvrir le dernier rapport** : rouvre celui déjà généré, sans rien recalculer ;
-* **Collecter maintenant**, **Ouvrir InfosHebdo** (fenêtre de réglages) et
-  **Quitter**.
+Elle affiche aussi la date de la dernière recherche et l'état du rapport de la
+semaine. La croix la replie dans la zone de notification au lieu de quitter.
 
-Un double-clic ouvre la fenêtre. Pour que l'icône soit présente dès l'ouverture
-de session : `python -m infoshebdo startup enable` (ou l'onglet **Planification**).
-La croix de la fenêtre la replie dans la zone de notification au lieu de quitter ;
-« Quitter » reste dans le menu de l'icône. Cette interface est indépendante de la
-tâche planifiée : l'une ou l'autre peut tourner seule.
+**L'icône près de l'horloge** : double-clic ou *Ouvrir InfosHebdo* pour la
+fenêtre ; *Rechercher les données* et *Ouvrir le rapport* en un clic ; case
+*Lancer au démarrage de Windows* (décochée, elle est définitivement respectée :
+l'application ne se réinscrit plus jamais d'elle-même) ; *Quitter*.
 
-### Interface graphique (facultative)
+**Ce qu'elle fait seule**, au lancement puis toutes les 30 minutes :
 
-```powershell
-python -m infoshebdo ui
-```
+| Étape | Fréquence | Mémorisée par |
+| --- | --- | --- |
+| Collecte | une fois par jour, et seulement si au moins une source a répondu (hors ligne, elle réessaie 30 minutes plus tard) | journal des collectes en base |
+| Ouverture du rapport | une fois par semaine ISO, au premier passage | clé `last_report_week` en base (ex. `2026-W41`) |
 
-L'interface sert à régler l'outil et à lancer les traitements à la main. Elle
-n'est pas nécessaire au fonctionnement automatique : la tâche planifiée ne la
-démarre jamais.
+Une session laissée ouverte du dimanche au lundi ouvre donc le rapport le lundi ;
+un poste éteint le lundi l'ouvre le mardi, à son premier démarrage ; une
+installation neuve l'ouvre tout de suite, quel que soit le jour. Ouvrir le rapport
+à la main compte comme l'avoir vu : il ne se rouvrira pas derrière. La collecte
+passe toujours avant le rapport, pour que la page contienne les chiffres du jour.
+Pour garder la collecte sans l'ouverture automatique : `report.auto_open: false`.
 
-| Onglet | Contenu |
-| --- | --- |
-| **Tableau de bord** | état de la base, journal de la dernière collecte, boutons collecter / générer et ouvrir le rapport |
-| **Suivi** | lignes par classement, semaines de rattrapage, marchés box-office et Steam, zones Box Office Mojo, activation de chaque source |
-| **Flux presse** | flux RSS surveillés, mots-clés, bouton de test qui montre ce qui serait retenu sans rien stocker |
-| **Rapport** | titre, sections vides, ouverture automatique chaque semaine |
-| **Planification** | heure de déclenchement, installation et suppression de la tâche, état réel |
-| **Import manuel** | dépôt des CSV, ouverture du dossier, modèle, import immédiat |
+Relancer `InfosHebdo.exe` alors qu'elle tourne déjà ne crée pas de seconde copie :
+la première affiche simplement sa fenêtre.
 
-Les traitements longs tournent en tâche de fond : la fenêtre reste utilisable et
-le journal défile en direct. Un seul traitement à la fois, les collecteurs
-écrivant tous dans la même base. Tout lancement enregistre d'abord les réglages
-affichés, pour qu'une modification ne soit jamais ignorée.
+### Quand la collecte échoue
 
-### Fichiers de configuration
+Une application sans console ne peut pas afficher d'erreur : **une fenêtre
+s'ouvre au premier plan**, même si l'application est repliée, avec le message
+exact de chaque source en erreur. Elle propose d'ouvrir le dernier rapport, le
+journal, de relancer la recherche, et de copier le détail.
 
-`config.yaml` — ce qui est suivi :
+| Situation | Fenêtre | Rapport de la semaine |
+| --- | --- | --- |
+| Aucune source n'a répondu (poste hors ligne, par exemple) | oui | ouvert avec un **avertissement jaune en tête de page** (« les chiffres datent de la dernière collecte réussie, le JJ/MM/AAAA »). Semaine **non** marquée comme vue : le rapport à jour s'ouvrira dès qu'une collecte aboutira. Rouvert au plus une fois par jour tant que le réseau est coupé |
+| Certaines sources seulement en erreur | oui | ouvert, avec un avertissement qui nomme les sources concernées |
+| Étape d'agrégation du box-office monde en erreur | oui | ouvert |
+| Le navigateur ne s'ouvre pas | oui, avec le chemin du rapport | semaine non marquée comme vue, retenté |
+| Erreur imprévue (base verrouillée, bug) | oui, avec le détail technique | — |
+
+Pour les vérifications automatiques, la fenêtre s'ouvre **au plus une fois par
+jour** (hors ligne, la vérification échoue toutes les 30 minutes) ; pour une
+recherche lancée à la main, elle s'ouvre toujours.
+
+**Comment une panne est détectée.** Les collecteurs tolèrent les pages manquantes
+(le box-office France et Japon arrive avec des semaines de retard) et les notent
+sans échouer : sans réseau, toutes les sources auraient donc l'air « vides ». Le
+client HTTP compte donc les requêtes : une source dont **aucune** requête n'a
+abouti est en erreur, une source jointe mais sans donnée reste « vide ». Hors
+ligne, un serveur injoignable est abandonné pour le reste de la collecte, et
+après trois serveurs distincts sans aucune réponse les suivants ne sont plus
+essayés : l'erreur apparaît en une trentaine de secondes, pas en plusieurs
+minutes.
+
+Le journal est `logs/infoshebdo.log`. Une erreur survenant avant sa mise en place
+atterrit dans `logs/crash.log` : une application sans console ne doit jamais
+échouer en silence.
+
+### Réglages
+
+Il n'y a pas d'écran de réglages : tout est dans `config.yaml`, à côté de
+l'exécutable (`%LOCALAPPDATA%\Programs\InfosHebdo`). Le fichier est **relu à
+chaque vérification et à chaque recherche** : une modification est prise en compte
+sans relancer l'application.
 
 ```yaml
 top_n: 10                 # lignes par classement dans le rapport
@@ -128,142 +151,62 @@ report:
   auto_open: true         # ouvrir le rapport une fois par semaine
 ```
 
-`.env` — facultatif. Il ne contient plus de secret : seulement des réglages
-techniques (`INFOSHEBDO_DB`, `INFOSHEBDO_HTTP_DELAY`, `INFOSHEBDO_HTTP_CACHE`),
-voir `.env.example`.
+Les chiffres que les sources libres ne publient pas (GSD, Circana, Famitsu)
+s'ajoutent en déposant un CSV dans `data/import/` : voir
+[Jeu vidéo — toutes plateformes](#jeu-vidéo--toutes-plateformes).
 
-Un `config.yaml` ou un `.env` issu d'une version qui envoyait le rapport par
-courriel reste lisible : les clés `email`, `attach_html`, `open_after_send` et
-`open_on_ui_start` sont ignorées, et les lignes `SMTP_*` / `MAIL_*` du `.env`
-n'ont plus d'effet (vous pouvez les supprimer).
+`.env` — facultatif, sans aucun secret : `INFOSHEBDO_DB`, `INFOSHEBDO_HTTP_DELAY`,
+`INFOSHEBDO_HTTP_CACHE`, voir `.env.example`.
 
-`python -m infoshebdo config` affiche la configuration effective (fusion des
-valeurs par défaut et du fichier).
+Un `config.yaml` ou un `.env` issu d'une version précédente (envoi par courriel,
+interface à onglets) reste lisible : les clés `email`, `interface`,
+`attach_html`, `open_after_send` et `open_on_ui_start` sont ignorées, et les
+lignes `SMTP_*` / `MAIL_*` du `.env` n'ont plus d'effet.
 
----
+### Depuis les sources (Python)
 
-## Ligne de commande
+```powershell
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+python -m infoshebdo            # l'application, comme l'exécutable
+```
+
+Les commandes suivantes servent à la mise au point et au diagnostic. L'exécutable
+n'ayant pas de console, elles se lancent depuis les sources.
 
 | Commande | Rôle |
 | --- | --- |
-| `python -m infoshebdo auto` | **la commande planifiée** : collecte du jour (si pas déjà faite), puis ouvre le rapport de la semaine (s'il n'a pas déjà été ouvert) |
-| `python -m infoshebdo auto --force` | idem, mais rouvre le rapport même s'il l'a déjà été cette semaine |
-| `python -m infoshebdo auto --no-window` | idem, sans la fenêtre d'erreur |
-| `python -m infoshebdo collect` | collecte, sans rapport |
-| `python -m infoshebdo report` | générer le rapport dans `reports/` |
-| `python -m infoshebdo report --open` | générer **et** ouvrir dans le navigateur |
-| `python -m infoshebdo schedule install` | déclarer la tâche automatique |
-| `python -m infoshebdo schedule` | état de la tâche |
-| `python -m infoshebdo schedule remove` | retirer la tâche |
+| `python -m infoshebdo` (ou `ui`) | l'application (`ui --minimized` : démarrer repliée) |
+| `python -m infoshebdo auto` | une vérification : collecte du jour (si pas déjà faite), puis ouverture du rapport de la semaine (s'il ne l'a pas été). `--force` le rouvre, `--no-window` supprime la fenêtre d'erreur |
+| `python -m infoshebdo collect` | collecte, sans rapport (`--backfill N`, `--only SOURCE`) |
+| `python -m infoshebdo report` | générer le rapport dans `reports/` (`--open` pour l'ouvrir) |
 | `python -m infoshebdo status` | état de la base, dernière collecte, rapport de la semaine |
 | `python -m infoshebdo sources` | sources, ce qu'elles fournissent, leur fiabilité |
 | `python -m infoshebdo config` | configuration effective |
-| `python -m infoshebdo ui` | ouvrir l'interface (`--minimized` : démarrer replié dans la zone de notification) |
-| `python -m infoshebdo startup enable` | lancer l'interface, avec son icône près de l'horloge, à l'ouverture de session (`status`, `disable`) |
-| `python -m infoshebdo selftest` | vérifier qu'une installation est complète (modules, gabarit, icône) |
+| `python -m infoshebdo selftest` | vérifier qu'une installation est complète |
 
 ```powershell
-# rattraper 12 semaines d'historique (première installation)
+# rattraper 12 semaines d'historique
 python -m infoshebdo collect --backfill 12
 
 # ne relancer qu'une source
 python -m infoshebdo collect --only allocine_france
-
-# déclenchement quotidien à 07:30
-python -m infoshebdo schedule install --time 07:30
 ```
 
 `run.py` est un point d'entrée équivalent, utilisable depuis n'importe quel
-répertoire : c'est celui qu'inscrit la tâche planifiée.
+répertoire.
 
----
-
-## Automatisation
-
-`schedule install` (ou l'onglet **Planification**) inscrit **une seule tâche**
-dans le Planificateur de tâches Windows, `InfosHebdo`, qui lance
-`pythonw.exe run.py auto`. Elle se déclenche :
-
-* **chaque jour** à l'heure choisie (09:00 par défaut) ;
-* **deux minutes après chaque ouverture de session**.
-
-Le second déclencheur est ce qui donne « lundi, sinon mardi » : un poste éteint
-à l'heure prévue manque le déclencheur quotidien, mais la première ouverture de
-session suivante lance la tâche. Comme la tâche peut ainsi tourner plusieurs
-fois par jour, chaque étape vérifie d'abord si elle a déjà été faite :
-
-| Étape | Fréquence | Mémorisée par |
-| --- | --- | --- |
-| Collecte | une fois par jour, et seulement si au moins une source a répondu (un poste hors ligne réessaie au déclenchement suivant) | journal des collectes en base |
-| Ouverture du rapport | une fois par semaine ISO, au premier passage | clé `last_report_week` en base (ex. `2026-W41`) |
-
-La collecte passe toujours avant le rapport, pour que la page ouverte contienne
-les chiffres du jour. Pour ne plus ouvrir de rapport tout en gardant la
-collecte, mettre `report.auto_open: false`.
-
-### Quand la collecte échoue
-
-La tâche tourne sans console : une erreur ne doit jamais rester cachée dans un
-journal. Dès qu'un problème survient, **une fenêtre s'ouvre au premier plan**
-avec le message exact de chaque source en erreur. Elle propose d'ouvrir le
-dernier rapport, le journal, l'interface (pour relancer une collecte) et de
-copier le détail.
-
-| Situation | Fenêtre | Rapport de la semaine |
-| --- | --- | --- |
-| Aucune source n'a répondu (poste hors ligne, par exemple) | oui | ouvert avec un **avertissement jaune en tête de page** (« les chiffres datent de la dernière collecte réussie, le JJ/MM/AAAA »). Semaine **non** marquée comme vue : le rapport à jour s'ouvrira dès qu'une collecte aboutira. Rouvert au plus une fois par jour tant que le réseau est coupé |
-| Certaines sources seulement en erreur | oui | ouvert, avec un avertissement qui nomme les sources concernées |
-| Étape d'agrégation du box-office monde en erreur | oui | ouvert |
-| Le navigateur ne s'ouvre pas | oui, avec le chemin du rapport | semaine non marquée comme vue, retenté |
-| Erreur imprévue (base verrouillée, bug) | oui, avec le détail technique | — |
-
-**Comment une panne est détectée.** Les collecteurs tolèrent les pages manquantes
-(le box-office France et Japon arrive avec des semaines de retard) et les notent
-sans échouer : sans réseau, toutes les sources auraient donc l'air « vides ». Le
-client HTTP compte donc les requêtes : une source dont **aucune** requête n'a
-abouti est en erreur, une source jointe mais sans donnée reste « vide ». Hors
-ligne, un serveur injoignable est abandonné pour le reste de la collecte, et
-après trois serveurs distincts sans aucune réponse les suivants ne sont plus
-essayés : l'erreur apparaît en une trentaine de secondes, pas en plusieurs
-minutes.
-
-Une collecte qui a réussi au moins en partie compte pour la journée : le
-déclenchement suivant ne relance rien et n'ouvre donc pas une seconde fenêtre.
-Le code de retour de la tâche (`1`, ou `2` pour une erreur imprévue) reste
-visible dans le Planificateur de tâches. `auto --no-window` supprime la
-fenêtre ; sans écran (cron), l'erreur reste dans `logs/infoshebdo.log`.
-
-Le programme écrit son journal dans `logs/infoshebdo.log`. Une erreur survenant
-avant la mise en place du journal atterrit dans `logs/crash.log` : une tâche
-sans console ne doit jamais échouer en silence.
-
-Deux points à connaître :
-
-* La tâche est créée en **mode interactif** : elle s'exécute quand la session
-  Windows est ouverte, même verrouillée, mais pas si le poste est éteint ou
-  l'utilisateur déconnecté. C'est aussi ce qui permet d'ouvrir une fenêtre de
-  navigateur.
-* `StartWhenAvailable` est actif : une exécution manquée est rattrapée au
-  démarrage suivant. Sans cela, une journée d'arrêt serait perdue
-  définitivement, les relevés instantanés (joueurs simultanés Steam) ne se
-  rattrapant pas.
-
-La tâche remplace les deux tâches des versions précédentes
-(`InfosHebdo-Collecte`, `InfosHebdo-Rapport`) : `schedule install` et
-`schedule remove` les suppriment si elles existent.
-
-### Sous Linux ou macOS
-
-La planification intégrée est propre à Windows. Ailleurs, une ligne cron
-suffit, toujours une fois par jour (la commande décide seule de ce qu'il y a à
-faire) :
+**Sous Linux ou macOS**, l'application s'ouvre de la même façon
+(`python run.py`). Pour une exécution sans interface, une ligne cron par jour
+suffit : la commande décide seule de ce qu'il y a à faire.
 
 ```
 0 9 * * *  /chemin/vers/python /chemin/vers/InfosHebdo/run.py auto
 ```
 
-L'ouverture dans le navigateur demande une session graphique ; sans elle,
-`auto` collecte et laisse le rapport dans `reports/`.
+L'ouverture dans le navigateur demande une session graphique ; sans elle, `auto`
+collecte et laisse le rapport dans `reports/`.
 
 ---
 
@@ -365,10 +308,10 @@ trouve dans `data/import/exemple-gsd-france.csv.modele`.
 ```
 run.py              point d'entrée indépendant du répertoire courant
 build_exe.py        fabrique et installe l'exécutable Windows (voir plus haut)
-infoshebdo.spec     spécification PyInstaller : deux exécutables, un seul dossier
+infoshebdo.spec     spécification PyInstaller : un exécutable sans console
 infoshebdo/
-  cli.py            commandes en ligne
-  config.py         lecture ET écriture de config.yaml et .env
+  cli.py            commandes en ligne (sans argument : l'application)
+  config.py         lecture et écriture de config.yaml
   paths.py          emplacements de fichiers
   http.py           client HTTP : en-tête, réessais, délai de politesse, cache, bilan des requêtes
   weeks.py          calendriers de semaines (Mojo, France, ISO, Steam)
@@ -377,9 +320,11 @@ infoshebdo/
   derive.py         données calculées (agrégat monde, résolution de titres)
   analysis.py       construction du rapport, calcul des évolutions
   report.py         rendu HTML et texte
-  auto.py           commande planifiée : collecte du jour, rapport de la semaine
+  auto.py           vérification : collecte du jour, rapport de la semaine
   viewer.py         ouverture dans le navigateur, mémoire « une fois par semaine »
-  scheduler.py      tâche planifiée Windows, définie en XML
+  resident.py       logique de l'application : démarrage de session, actions manuelles
+  instance.py       instance unique (une seconde copie réveille la première)
+  startup.py        lancement à l'ouverture de session (registre Windows)
   collectors/
     base.py           contrat commun, vocabulaire, registre
     boxofficemojo.py  recettes de week-end USD, zones US/FR/JP
@@ -389,24 +334,24 @@ infoshebdo/
     editorial.py      veille RSS des publications de classements
     manual.py         import CSV
   ui/
-    app.py            fenêtre principale, enregistrement, lancement
-    settings.py       onglets Suivi, Flux presse, Rapport
-    error_window.py   fenêtre d'erreur de la commande planifiée
-    panels.py         onglets Tableau de bord, Planification, Import
-    runner.py         exécution en tâche de fond, journal par file d'attente
-    widgets.py        briques Tk réutilisées
+    app.py            fenêtre principale (deux boutons), minuterie de 30 minutes
+    tray.py           icône de la zone de notification et son menu
+    error_window.py   fenêtre d'erreur
+    runner.py         exécution en tâche de fond, messages par file d'attente
+    files.py          ouverture d'un fichier ou d'un dossier
 ```
 
 Quatre principes de conception :
 
-* **Tout est en Python.** Aucun script PowerShell ni `.cmd` : les tâches
-  planifiées sont déclarées par `scheduler.py`, qui génère la définition XML et
-  la passe à `schtasks.exe` (l'outil livré avec Windows). Un fichier XML donne
-  un contrôle exact sur l'exécutable, ses arguments, le répertoire de travail et
-  le rattrapage — ce que l'option `/TR` ne permet pas.
+* **Tout est en Python, et rien n'est à installer à la main.** Aucun script
+  PowerShell ni `.cmd`, aucune tâche planifiée : l'application est résidente,
+  s'inscrit seule au démarrage de la session, et décide elle-même de ce qu'il y a à
+  faire (voir `auto.py`). Une application résidente remplace la tâche planifiée
+  parce qu'elle sait aussi se montrer : la fenêtre d'erreur et les deux boutons
+  vivent dans le même programme.
 * **Aucun appel Tk depuis un fil de travail.** Une collecte dure une à deux
-  minutes ; elle tourne dans un thread qui ne fait que déposer des lignes dans
-  une file, vidée par la fenêtre sur son propre fil.
+  minutes ; elle tourne dans un thread qui ne fait que déposer son résultat et un
+  message dans une file, vidée par la fenêtre sur son propre fil.
 * **Une source qui tombe ne fait jamais échouer la collecte.** Chaque collecteur
   est isolé ; son résultat et son erreur éventuelle sont journalisés et repris en
   bas du rapport. Une section vide indique donc toujours *pourquoi* elle est
@@ -445,7 +390,9 @@ Tables annexes : `runs` et `collector_runs` (journal d'exécution), `news`
 python -m unittest discover -s tests -t .
 ```
 
-160 tests, aucun accès réseau ni navigateur. Ce qu'ils verrouillent :
+194 tests, aucun accès réseau ni navigateur (les tests de fenêtres créent de
+vraies fenêtres Tk, jamais affichées ; ils sont ignorés sans écran). Ce qu'ils
+verrouillent :
 
 * **parsers** — extraits HTML reproduisant la structure réelle des pages
   observées (classes CSS, `data-heading`, espaces insécables dans les nombres) ;
@@ -457,12 +404,18 @@ python -m unittest discover -s tests -t .
   compris accents et zone Mojo vide, et lecture d'un ancien fichier qui
   contenait les réglages de courriel. Un rendu qui perdrait une valeur
   effacerait silencieusement des réglages ;
-* **planification** — la définition XML de la tâche (déclencheur quotidien et
-  d'ouverture de session, guillemets, échappement). Une erreur y est
-  invisible : Windows annonce un succès et rien ne s'exécute ;
 * **ouverture hebdomadaire** — le rapport s'ouvre une fois par semaine ISO
   (lundi, ou mardi si le lundi est manqué), la collecte une fois par jour, et
-  un navigateur qui échoue ne fait pas perdre la semaine ;
+  un navigateur qui échoue ne fait pas perdre la semaine. Les dates simulées
+  sont dans une semaine lointaine : un test ne doit pas dépendre du jour où on
+  le lance ;
+* **application résidente** — inscription au démarrage une seule fois et refus de
+  l'utilisateur définitif, premier lancement traité comme la première utilisation
+  de la semaine (n'importe quel jour), session laissée ouverte du dimanche au
+  lundi, une seule fenêtre d'erreur par jour hors ligne, les deux boutons et le
+  menu de l'icône, repli dans la zone de notification ;
+* **instance unique** — de vrais sockets locaux : une seconde copie réveille la
+  première, et un autre programme sur le même port n'est pas pris pour elle ;
 * **échecs de collecte** — la fenêtre d'erreur s'ouvre quand il le faut et
   seulement alors, montre le message exact de chaque source, y compris pour une
   erreur imprévue, et une fenêtre impossible à afficher ne masque jamais
@@ -472,8 +425,8 @@ python -m unittest discover -s tests -t .
   erreur (et non « vides »), une source jointe mais sans donnée ne l'est pas, un
   serveur injoignable est abandonné, et un Internet qui marche n'est jamais pris
   pour une coupure ;
-* **exécutable** — la tâche planifiée vise toujours l'exécutable sans console,
-  même si on l'installe depuis la version console ;
+* **exécutable** — l'entrée de démarrage vise l'exécutable empaqueté, avec son
+  chemin entre guillemets s'il contient des espaces ;
 * **page du rapport** — document HTML autonome en UTF-8, sans dépendance
   externe : ouvert depuis le disque, un fichier sans `charset` afficherait
   « OdyssÃ©e ».
