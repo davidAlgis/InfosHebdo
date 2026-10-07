@@ -100,6 +100,29 @@ Pour garder la collecte sans l'ouverture automatique : `report.auto_open: false`
 Relancer `InfosHebdo.exe` alors qu'elle tourne déjà ne crée pas de seconde copie :
 la première affiche simplement sa fenêtre.
 
+### Le rapport
+
+Une page HTML autonome (`reports/infoshebdo-AAAA-MM-JJ.html`, avec sa version
+texte) : aucun script, aucune feuille externe, elle s'ouvre hors ligne et se
+déplace ou s'archive sans rien perdre.
+
+* **Chaque classement est un panneau pliable.** Tous sont **pliés** à l'ouverture,
+  sauf le box-office France, qui est déplié. Un panneau plié montre déjà son titre,
+  sa période, sa fiabilité et le premier du classement. Les panneaux sont des
+  éléments HTML natifs (`<details>`) : ils fonctionnent dans tous les navigateurs,
+  sans JavaScript.
+* **Chaque classement renvoie vers sa source**, sous le tableau : Allociné pour le
+  box-office France, Box Office Mojo pour les autres marchés, les pages de
+  classement de Steam par pays, SteamSpy. Le lien vise **la semaine exacte** du
+  classement (par exemple `boxofficemojo.com/weekend/2026W40/?area=JP`), pas la
+  page d'accueil de la source ; le « monde » additionnant plusieurs zones, il en
+  liste une par zone. Quand il n'y a pas de donnée, le lien mène à la page
+  générale de la source, pour vérifier si le problème vient d'elle. Les liens
+  s'ouvrent dans un nouvel onglet. Les noms de jeux Steam renvoient à leur fiche,
+  et les publications de classements repérées à l'article.
+* Les chiffres importés à la main (CSV) n'ont pas de lien : leur source est un
+  fichier local.
+
 ### Quand la collecte échoue
 
 Une application sans console ne peut pas afficher d'erreur : **une fenêtre
@@ -320,6 +343,7 @@ infoshebdo/
   derive.py         données calculées (agrégat monde, résolution de titres)
   analysis.py       construction du rapport, calcul des évolutions
   report.py         rendu HTML et texte
+  sources.py        adresses des pages qui publient les chiffres (liens du rapport)
   auto.py           vérification : collecte du jour, rapport de la semaine
   viewer.py         ouverture dans le navigateur, mémoire « une fois par semaine »
   resident.py       logique de l'application : démarrage de session, actions manuelles
@@ -390,7 +414,7 @@ Tables annexes : `runs` et `collector_runs` (journal d'exécution), `news`
 python -m unittest discover -s tests -t .
 ```
 
-194 tests, aucun accès réseau ni navigateur (les tests de fenêtres créent de
+216 tests, aucun accès réseau ni navigateur (les tests de fenêtres créent de
 vraies fenêtres Tk, jamais affichées ; ils sont ignorés sans écran). Ce qu'ils
 verrouillent :
 
@@ -427,6 +451,10 @@ verrouillent :
   pour une coupure ;
 * **exécutable** — l'entrée de démarrage vise l'exécutable empaqueté, avec son
   chemin entre guillemets s'il contient des espaces ;
+* **panneaux et liens de source** — chaque classement est un panneau plié, sauf le
+  box-office France ; les liens visent la semaine exacte, sont les mêmes pages que
+  celles que la collecte télécharge, s'ouvrent dans un nouvel onglet et échappent
+  les libellés ;
 * **page du rapport** — document HTML autonome en UTF-8, sans dépendance
   externe : ouvert depuis le disque, un fichier sans `charset` afficherait
   « OdyssÃ©e ».

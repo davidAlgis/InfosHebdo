@@ -56,57 +56,78 @@
 
   {% for table in section.tables %}
   {% if table.rows or show_empty %}
-  <tr><td style="padding:18px 28px 0 28px;">
+  <tr><td style="padding:14px 28px 0 28px;">
 
-    <div style="font-size:15px;font-weight:600;margin-bottom:2px;">{{ table.title }}</div>
-    <div style="font-size:12px;color:{{ MUTED }};margin-bottom:8px;">
-      {% if table.period_label %}{{ table.period_label }} &nbsp;&middot;&nbsp; {% endif %}{{ table.source_label }}
-      {% if table.reliability and table.reliability != '-' %} &nbsp;{{ badge(table.reliability) }}{% endif %}
-    </div>
-
-    {% if table.warning %}
-    <div style="margin:0 0 10px 0;padding:9px 11px;background:#fef3c7;border-left:3px solid #d97706;font-size:12px;line-height:1.5;color:#78350f;">
-      <strong>Attention :</strong> {{ table.warning }}
-    </div>
-    {% endif %}
-
-    {% if table.rows %}
-    <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;font-size:13px;">
-      <tr>
-        {% for column in table.columns %}
-        <th style="text-align:{{ 'left' if loop.index0 == 1 else ('center' if loop.index0 == 0 else 'right') }};padding:6px 8px;border-bottom:1px solid {{ INK }};font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:{{ MUTED }};font-weight:600;">{{ column }}</th>
-        {% endfor %}
-      </tr>
-      {% for row in table.rows %}
-      <tr style="background:{{ '#fafafa' if loop.index0 % 2 else '#ffffff' }};">
-        <td style="padding:7px 8px;text-align:center;border-bottom:1px solid {{ LINE }};color:{{ MUTED }};font-variant-numeric:tabular-nums;">{{ row.rank if row.rank else '-' }}</td>
-        <td style="padding:7px 8px;border-bottom:1px solid {{ LINE }};">
-          {% if row.url %}<a href="{{ row.url }}" style="color:{{ INK }};text-decoration:none;font-weight:600;">{{ row.title }}</a>
-          {% else %}<span style="font-weight:600;">{{ row.title }}</span>{% endif %}
-          {% if row.is_new %} <span style="font-size:10px;color:{{ UP }};font-weight:700;">NOUVEAU</span>{% endif %}
-          {% if row.detail %}<div style="font-size:11px;color:{{ MUTED }};margin-top:1px;">{{ row.detail }}</div>{% endif %}
-        </td>
-        <td style="padding:7px 8px;text-align:right;border-bottom:1px solid {{ LINE }};font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap;">{{ row.value_fmt }}</td>
-        <td style="padding:7px 8px;text-align:right;border-bottom:1px solid {{ LINE }};white-space:nowrap;font-variant-numeric:tabular-nums;">
-          {% if row.delta_pct %}<span style="color:{{ delta_color(row.delta_class) }};font-weight:600;">{{ row.delta_pct }}</span>
-          {% elif row.move %}<span style="color:{{ delta_color(row.move_class) }};font-weight:600;">{{ row.move }}</span>
-          {% else %}<span style="color:{{ MUTED }};">-</span>{% endif %}
-        </td>
-        {% if table.columns|length > 4 %}
-        <td style="padding:7px 8px;text-align:right;border-bottom:1px solid {{ LINE }};color:{{ MUTED }};font-variant-numeric:tabular-nums;white-space:nowrap;">{{ row.secondary or '-' }}</td>
+    {# Chaque classement est un panneau pliable (natif : ni script ni feuille externe). #}
+    <details{% if table.expanded %} open{% endif %} style="border:1px solid {{ LINE }};border-radius:8px;">
+      <summary style="cursor:pointer;padding:11px 14px;background:#fafafa;border-radius:8px;">
+        <span style="font-size:15px;font-weight:600;">{{ table.title }}</span>
+        <span style="font-size:12px;color:{{ MUTED }};">
+          {% if table.period_label %} &nbsp;&middot;&nbsp; {{ table.period_label }}{% endif %}
+          {% if table.reliability and table.reliability != '-' %} &nbsp;{{ badge(table.reliability) }}{% endif %}
+        </span>
+        {% if table.rows %}
+        <span style="display:block;font-size:12px;color:{{ MUTED }};margin-top:3px;">1. {{ table.rows[0].title }} &mdash; {{ table.rows[0].value_fmt }}</span>
+        {% else %}
+        <span style="display:block;font-size:12px;color:{{ MUTED }};margin-top:3px;">Pas de donnee</span>
         {% endif %}
-      </tr>
-      {% endfor %}
-    </table>
-    {% else %}
-    <div style="padding:12px;background:#f9fafb;border:1px dashed {{ LINE }};font-size:12px;color:{{ MUTED }};">
-      Pas de donnee. {{ table.note }}
-    </div>
-    {% endif %}
+      </summary>
 
-    {% if table.note and table.rows %}
-    <p style="margin:7px 0 0 0;font-size:11px;line-height:1.5;color:{{ MUTED }};">{{ table.note }}</p>
-    {% endif %}
+      <div style="padding:10px 14px 14px 14px;">
+        <div style="font-size:12px;color:{{ MUTED }};margin-bottom:8px;">{{ table.source_label }}</div>
+
+        {% if table.warning %}
+        <div style="margin:0 0 10px 0;padding:9px 11px;background:#fef3c7;border-left:3px solid #d97706;font-size:12px;line-height:1.5;color:#78350f;">
+          <strong>Attention :</strong> {{ table.warning }}
+        </div>
+        {% endif %}
+
+        {% if table.rows %}
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;font-size:13px;">
+          <tr>
+            {% for column in table.columns %}
+            <th style="text-align:{{ 'left' if loop.index0 == 1 else ('center' if loop.index0 == 0 else 'right') }};padding:6px 8px;border-bottom:1px solid {{ INK }};font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:{{ MUTED }};font-weight:600;">{{ column }}</th>
+            {% endfor %}
+          </tr>
+          {% for row in table.rows %}
+          <tr style="background:{{ '#fafafa' if loop.index0 % 2 else '#ffffff' }};">
+            <td style="padding:7px 8px;text-align:center;border-bottom:1px solid {{ LINE }};color:{{ MUTED }};font-variant-numeric:tabular-nums;">{{ row.rank if row.rank else '-' }}</td>
+            <td style="padding:7px 8px;border-bottom:1px solid {{ LINE }};">
+              {% if row.url %}<a href="{{ row.url }}" target="_blank" rel="noopener noreferrer" style="color:{{ INK }};text-decoration:none;font-weight:600;">{{ row.title }}</a>
+              {% else %}<span style="font-weight:600;">{{ row.title }}</span>{% endif %}
+              {% if row.is_new %} <span style="font-size:10px;color:{{ UP }};font-weight:700;">NOUVEAU</span>{% endif %}
+              {% if row.detail %}<div style="font-size:11px;color:{{ MUTED }};margin-top:1px;">{{ row.detail }}</div>{% endif %}
+            </td>
+            <td style="padding:7px 8px;text-align:right;border-bottom:1px solid {{ LINE }};font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap;">{{ row.value_fmt }}</td>
+            <td style="padding:7px 8px;text-align:right;border-bottom:1px solid {{ LINE }};white-space:nowrap;font-variant-numeric:tabular-nums;">
+              {% if row.delta_pct %}<span style="color:{{ delta_color(row.delta_class) }};font-weight:600;">{{ row.delta_pct }}</span>
+              {% elif row.move %}<span style="color:{{ delta_color(row.move_class) }};font-weight:600;">{{ row.move }}</span>
+              {% else %}<span style="color:{{ MUTED }};">-</span>{% endif %}
+            </td>
+            {% if table.columns|length > 4 %}
+            <td style="padding:7px 8px;text-align:right;border-bottom:1px solid {{ LINE }};color:{{ MUTED }};font-variant-numeric:tabular-nums;white-space:nowrap;">{{ row.secondary or '-' }}</td>
+            {% endif %}
+          </tr>
+          {% endfor %}
+        </table>
+        {% else %}
+        <div style="padding:12px;background:#f9fafb;border:1px dashed {{ LINE }};font-size:12px;color:{{ MUTED }};">
+          Pas de donnee. {{ table.note }}
+        </div>
+        {% endif %}
+
+        {% if table.note and table.rows %}
+        <p style="margin:7px 0 0 0;font-size:11px;line-height:1.5;color:{{ MUTED }};">{{ table.note }}</p>
+        {% endif %}
+
+        {% if table.links %}
+        <p style="margin:10px 0 0 0;font-size:12px;line-height:1.6;color:{{ MUTED }};">
+          Source{{ 's' if table.links|length > 1 }} :
+          {% for link in table.links %}<a href="{{ link.url }}" target="_blank" rel="noopener noreferrer" style="color:#1d4ed8;text-decoration:underline;">{{ link.label }} &#8599;</a>{% if not loop.last %} &nbsp;&middot;&nbsp; {% endif %}{% endfor %}
+        </p>
+        {% endif %}
+      </div>
+    </details>
   </td></tr>
   {% endif %}
   {% endfor %}
@@ -119,7 +140,7 @@
       {% for item in section.news %}
       <tr>
         <td style="padding:7px 8px 7px 0;border-bottom:1px solid {{ LINE }};">
-          <a href="{{ item.url }}" style="color:{{ INK }};font-weight:600;text-decoration:none;">{{ item.title }}</a>
+          <a href="{{ item.url }}" target="_blank" rel="noopener noreferrer" style="color:{{ INK }};font-weight:600;text-decoration:none;">{{ item.title }}</a>
           <div style="font-size:11px;color:{{ MUTED }};margin-top:2px;">
             {{ item.source }}{% if item.published_at %} &middot; {{ item.published_at }}{% endif %}{% if item.markets %} &middot; {{ item.markets|join(', ') }}{% endif %}
           </div>

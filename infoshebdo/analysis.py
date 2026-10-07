@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import Any
 
-from . import db, weeks
+from . import db, sources, weeks
 from .collectors.base import (
     ADMISSIONS,
     ADMISSIONS_CUM,
@@ -35,6 +35,7 @@ from .collectors.base import (
     market_label,
 )
 from .derive import json_extra
+from .sources import Link
 
 NBSP = " "  # espace fine insecable, separateur de milliers francais
 
@@ -114,6 +115,10 @@ class Table:
     rows: list[Row] = field(default_factory=list)
     note: str = ""
     warning: str = ""
+    # Pages qui publient ce classement : verifier un chiffre en un clic.
+    links: list[Link] = field(default_factory=list)
+    # Panneau deplie a l'ouverture du rapport. Tous les autres sont plies.
+    expanded: bool = False
 
     @property
     def empty(self) -> bool:
@@ -257,10 +262,15 @@ def _period_label(rows: list[sqlite3.Row], fallback: str) -> str:
 # --------------------------------------------------------------------------- #
 # Section box-office
 # --------------------------------------------------------------------------- #
+# Seul le box-office France est deplie a l'ouverture du rapport.
+EXPANDED_TABLES = frozenset({"bo_fr"})
+
+
 def _box_office_table(
-    conn: sqlite3.Connection, market: str, top_n: int
+    conn: sqlite3.Connection, market: str, top_n: int, mojo_areas: dict | None = None
 ) -> Table | None:
     """Un tableau par marche : entrees pour la France, recettes USD sinon."""
+    areas = mojo_areas or {}
     if market == "FR":
         metric, cumul_metric = ADMISSIONS, ADMISSIONS_CUM
         unit, source = "entrees", "Allocine (comptage professionnel France)"
@@ -281,6 +291,8 @@ def _box_office_table(
             source_label=source,
             reliability="-",
             note="Aucune donnee en base pour ce marche.",
+            links=_box_office_links(market, None, areas),
+            expanded=key in EXPANDED_TABLES,
         )
 
     rows = db.chart(conn, BOX_OFFICE, market, metric, period, limit=top_n)
@@ -295,7 +307,9 @@ def _box_office_table(
         reliability=rows[0]["reliability"] if rows else "-",
         period_label=_period_label(rows, period),
         columns=("Rang", "Film", column, "vs S-1", "Cumul"),
+        expanded=key in EXPANDED_TABLES,
     )
+    table.links = _box_office_links(market, period, areas)
 
     if market == "WW":
         table.source_label = "Somme des zones collectees (calcul InfosHebdo)"
@@ -305,6 +319,15 @@ def _box_office_table(
         included: set[str] = set()
         for row in rows:
             included.update(json_extra(row["extra"]).get("markets_included") or [])
+        # Le « monde » est une somme : ses sources sont les zones additionnees.
+        table.links = [
+            sources.mojo_week(
+                period,
+                areas.get(zone, zone),
+                f"Box Office Mojo - {market_label(zone)}",
+            )
+            for zone in sorted(included)
+        ]
         if "partielle" in coverages or not included:
             table.warning = (
                 "Ce n'est pas le box-office mondial : aucune source libre ne le "
@@ -372,8 +395,19 @@ def _box_office_table(
     return table
 
 
+def _box_office_links(market: str, period: str | None, areas: dict) -> list[Link]:
+    """Liens de source d'un marche : la semaine precise si on la connait."""
+    if market == "FR":
+        return [sources.allocine_week(period)]
+    if market == "WW":
+        return []                       # somme calculee : voir les zones, plus bas
+    area = areas.get(market, market)
+    return [sources.mojo_week(period, area, f"Box Office Mojo - {market_label(market)}")]
+
+
 def box_office_section(conn: sqlite3.Connection, config) -> Section:
     markets = list(config.box_office.get("markets", []))
+    areas = config.box_office.get("mojo_areas", {}) or {}
     section = Section(
         key="box_office",
         title="Box-office cinema",
@@ -384,7 +418,7 @@ def box_office_section(conn: sqlite3.Connection, config) -> Section:
         ),
     )
     for market in markets:
-        table = _box_office_table(conn, market, config.top_n)
+        table = _box_office_table(conn, market, config.top_n, areas)
         if table:
             section.tables.append(table)
     return section
@@ -406,6 +440,7 @@ def _steam_rank_table(conn: sqlite3.Connection, market: str, top_n: int) -> Tabl
             source_label="Steam (Valve)",
             reliability="-",
             note="Aucune donnee en base pour ce marche.",
+            links=[sources.steam_topsellers(market)],
         )
 
     rows = db.chart(conn, STEAM, market, RANK, period, limit=top_n)
@@ -414,6 +449,7 @@ def _steam_rank_table(conn: sqlite3.Connection, market: str, top_n: int) -> Tabl
         title=title,
         unit="rang",
         source_label="Steam, classement officiel des ventes",
+        links=[sources.steam_topsellers(market)],
         reliability=rows[0]["reliability"] if rows else "-",
         period_label=_period_label(rows, period),
         columns=("Rang", "Jeu", "Semaines", "vs S-1"),
@@ -452,6 +488,7 @@ def _steam_ccu_table(conn: sqlite3.Connection, top_n: int) -> Table:
         title="Steam - joueurs simultanes (monde)",
         unit="joueurs",
         source_label="Steam, releve du jour",
+        links=[sources.steam_most_played()],
         reliability="officiel",
         columns=("Rang", "Jeu", "Joueurs", "vs 7 j", "Pic"),
         note=(
@@ -504,6 +541,7 @@ def _steamspy_table(conn: sqlite3.Connection, top_n: int) -> Table:
         title="Steam - proprietaires estimes (monde)",
         unit="proprietaires estimes",
         source_label="SteamSpy (estimation par echantillonnage)",
+        links=[sources.steamspy()],
         reliability="estime",
         columns=("Rang", "Jeu", "Proprietaires", "vs 7 j", "Fourchette"),
         note=(

@@ -288,6 +288,22 @@ class TestReportRendering(TempDbCase):
         self.assertNotIn("{{", html)
         self.assertIn("Box-office", text)
 
+    def test_france_is_the_only_panel_open_and_each_ranking_has_its_source(self):
+        # Sur de vraies donnees : seul le box-office France est deplie, et les
+        # liens visent la semaine exacte de chaque classement.
+        report = self._report()
+        tables = {t.key: t for s in report.sections for t in s.tables}
+        self.assertTrue(tables["bo_fr"].expanded)
+        self.assertFalse(tables["bo_us"].expanded)
+        self.assertEqual(
+            tables["bo_fr"].links[0].url,
+            "https://www.allocine.fr/boxoffice/france/sem-2026-08-12/",
+        )
+        self.assertEqual(
+            tables["bo_us"].links[0].url,
+            "https://www.boxofficemojo.com/weekend/2026W33/",
+        )
+
     def test_html_is_a_standalone_utf8_page(self):
         # Le rapport s'ouvre directement depuis le disque (file://). Sans
         # doctype ni charset, le navigateur devine l'encodage et affiche

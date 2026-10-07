@@ -64,6 +64,9 @@ def render_text(report: Report) -> str:
                 add(_wrap(f"  ATTENTION : {table.warning}", indent="  "))
             if not table.rows:
                 add(f"  (aucune donnee) {table.note}")
+                for link in table.links:
+                    add(f"  Source : {link.label}")
+                    add(f"           {link.url}")
                 continue
             # Sans en-tetes, la colonne de valeur est ambigue : chez Steam elle
             # porte un nombre de semaines consecutives, pas un volume.
@@ -79,6 +82,9 @@ def render_text(report: Report) -> str:
                 add(line)
             if table.note:
                 add(_wrap(f"  Note : {table.note}", indent="  "))
+            for link in table.links:
+                add(f"  Source : {link.label}")
+                add(f"           {link.url}")
 
         if section.news:
             add("")
